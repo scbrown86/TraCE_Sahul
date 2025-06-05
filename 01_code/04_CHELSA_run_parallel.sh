@@ -2,15 +2,17 @@
 conda deactivate
 conda activate CHELSA_paleo
 
-END=4680
+END=12
 START=1
 START_TIME=$(date +%s)
 
-export SINGULARITY_IMG="/home/dafcluster4/chelsa_paleo/singularity/chelsa_paleo.sif"
-export SCRIPT="/home/dafcluster4/chelsa_paleo/src/chelsa.py"
-export INPUT_DIR="/home/dafcluster4/Documents/GitHub/TraCE_Sahul/02_data/03_inputs/"
-export OUTPUT_DIR="/mnt/Data/CHELSA_1600_1990/output/"
-export SCRATCH_DIR="/mnt/Data/CHELSA_1600_1990/scratch/"
+export SINGULARITY_IMG="/home/dafcluster4/chelsa_paleo_dirk/chelsa_paleo/singularity/chelsa_paleo.sif"
+export SCRIPT="/home/dafcluster4/chelsa_paleo_dirk/chelsa_paleo/src/chelsa.py"
+export INPUT_DIR="/mnt/Data/CHELSA_1600_1990/INPUT_PALEO/"
+export OUTPUT_DIR="/mnt/Data/CHELSA_1600_1990/OUTPUT_PALEO/"
+export SCRATCH_DIR="/home/dafcluster4/scratch/"
+
+singularity exec $SINGULARITY_IMG python $SCRIPT -t 1 -i $INPUT_DIR -o $OUTPUT_DIR -tmp $SCRATCH_DIR
 
 seq $END -1 $START | parallel --bar -j 12 -k ' # will star at 12/1989 and work backwards
     TMP_PREFIX=$(printf "%04d" {}) &&
