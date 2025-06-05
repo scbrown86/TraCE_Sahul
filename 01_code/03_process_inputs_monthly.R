@@ -12,10 +12,7 @@ template <- rast(extent = ext(-180, 180, -90, 90), res = 3.75, val = 1L)
 template <- crop(template, ext(105, 161.25, -50, 10), snap = "out")
 template
 
-setwd("/home/dafcluster4/Documents/GitHub/temperature_test/")
-# source("write_cdf_function.R")
-# assignInNamespace(".write_cdf", write_cdf, ns = "terra")
-# setwd("C:/Users/Stu/Desktop/Trace_CHELSA_Inputs")
+setwd("/home/dafcluster4/Documents/GitHub/TraCE_Sahul")
 
 # need to create the following input files
 # INPUT DATA - CLIMATE DATA
@@ -53,7 +50,7 @@ setwd("/home/dafcluster4/Documents/GitHub/temperature_test/")
 # Proj4 string = '+proj=merc +lon_0=0 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs'
 
 # create relative humidity data
-huss <- rast("02_data/01_inputs/trace.36.400BP-1990CE.cam2.h0.RELHUM.2160101-2204012.Sahul.1900_1989CE.nc", "RELHUM")
+huss <- rast("02_data/01_inputs/trace.36.400BP-1990CE.cam2.h0.RELHUM.2160101-2204012.Sahul.1600_1989CE.nc", "RELHUM")
 time(huss) <- rev(seq(as.Date("1989-12-16"), by = "-1 months", l = nlyr(huss)))
 units(huss) <- "percent"
 varnames(huss) <- "RELHUM (Relative humidity)"
@@ -69,8 +66,8 @@ writeCDF(huss, "02_data/02_processed/huss.nc",
 )
 
 # create precipitation data
-pr <- rast("02_data/01_inputs/trace.36.400BP-1990CE.cam2.h0.PRECC.2160101-2204012.Sahul.1900_1989CE.nc", "PRECC") +
-     rast("02_data/01_inputs/trace.36.400BP-1990CE.cam2.h0.PRECL.2160101-2204012.Sahul.1900_1989CE.nc", "PRECL")
+pr <- rast("02_data/01_inputs/trace.36.400BP-1990CE.cam2.h0.PRECC.2160101-2204012.Sahul.1600_1989CE.nc", "PRECC") +
+     rast("02_data/01_inputs/trace.36.400BP-1990CE.cam2.h0.PRECL.2160101-2204012.Sahul.1600_1989CE.nc", "PRECL")
 time(pr) <- time(huss)
 units(pr) <- "kg/m2/s"
 varnames(pr) <- "rainfall"
@@ -78,17 +75,17 @@ names(pr) <- format(time(pr), "%b%Y")
 crs(pr) <- "EPSG:4326"
 pr
 par(mfrow = c(1, 2))
-plot(pr[[1]], fun = function() lines(land, col = "#FFFFFF"), main = "Jan 1900")
-plot(app(pr[[1:12]] * 86400 * c(31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31), sum), fun = function() lines(land, col = "#FFFFFF"), main = "1900 total")
+plot(pr[[1]], fun = function() lines(land, col = "#FFFFFF"), main = "Jan 1600")
+plot(app(pr[[1:12]] * 86400 * c(31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31), sum), fun = function() lines(land, col = "#FFFFFF"), main = "1600 total")
 par(mfrow = c(1, 1))
 writeCDF(pr, "02_data/02_processed/pr.nc",
-     varname = "rain", longname = "rainfall",
+     varname = "pr", longname = "precipitation",
      overwrite = TRUE,
      unit = "kg/m2/s", zname = "time", prec = "float"
 )
 
 # create ta_high
-ta_high <- rast("02_data/01_inputs/trace.36.400BP-1990CE.cam2.h0.T.2160101-2204012.Sahul.1900_1989CE.nc", "T")
+ta_high <- rast("02_data/01_inputs/trace.36.400BP-1990CE.cam2.h0.T.2160101-2204012.Sahul.1600_1989CE.nc", "T")
 ## need TA @ [z=20]
 ta_ind <- round(as.numeric(sapply(strsplit(names(ta_high), "=|_"), "[", 3)))
 ta_ind <- which(ta_ind == 601)
@@ -104,7 +101,7 @@ ta_high
 writeCDF(ta_high, "02_data/02_processed/ta_high.nc", varname = "T", longname = "T (TA_High)", overwrite = TRUE, unit = "K", zname = "time", prec = "float")
 
 # create ta_low
-ta_low <- rast("02_data/01_inputs/trace.36.400BP-1990CE.cam2.h0.T.2160101-2204012.Sahul.1900_1989CE.nc", "T")
+ta_low <- rast("02_data/01_inputs/trace.36.400BP-1990CE.cam2.h0.T.2160101-2204012.Sahul.1600_1989CE.nc", "T")
 ## need TA @ z=26
 ta_ind <- round(as.numeric(sapply(strsplit(names(ta_low), "=|_"), "[", 3)))
 ta_ind <- which(ta_ind == 993)
@@ -127,7 +124,7 @@ writeCDF(ta_low, "02_data/02_processed/ta_low.nc",
 )
 
 # create tasmax
-tasmax <- rast("02_data/01_inputs/trace.36.400BP-1990CE.cam2.h0.TSMX.2160101-2204012.Sahul.1900_1989CE.nc", "TSMX")
+tasmax <- rast("02_data/01_inputs/trace.36.400BP-1990CE.cam2.h0.TSMX.2160101-2204012.Sahul.1600_1989CE.nc", "TSMX")
 time(tasmax) <- time(huss)
 units(tasmax) <- "K"
 varnames(tasmax) <- "Temperature"
@@ -139,7 +136,7 @@ tasmax
 writeCDF(tasmax, "02_data/02_processed/tasmax.nc", varname = "tasmax", longname = "Maximum Temperature", overwrite = TRUE, unit = "K", zname = "time", prec = "float")
 
 # create tasmin
-tasmin <- rast("02_data/01_inputs/trace.36.400BP-1990CE.cam2.h0.TSMN.2160101-2204012.Sahul.1900_1989CE.nc", "TSMN")
+tasmin <- rast("02_data/01_inputs/trace.36.400BP-1990CE.cam2.h0.TSMN.2160101-2204012.Sahul.1600_1989CE.nc", "TSMN")
 time(tasmin) <- time(huss)
 units(tasmin) <- "K"
 varnames(tasmin) <- "Temperature"
@@ -154,7 +151,7 @@ mask(tasmax[[1:6]] - tasmin[[1:6]], land, inverse = TRUE)
 plot(mask(tasmax[[1:6]] - tasmin[[1:6]], land), fun = function() lines(land), range = c(0, 50))
 
 # create tas
-tas <- rast("02_data/01_inputs/trace.36.400BP-1990CE.cam2.h0.TS.2160101-2204012.Sahul.1900_1989CE.nc", "TS")
+tas <- rast("02_data/01_inputs/trace.36.400BP-1990CE.cam2.h0.TS.2160101-2204012.Sahul.1600_1989CE.nc", "TS")
 time(tas) <- time(huss)
 units(tas) <- "K"
 varnames(tas) <- "Temperature"
@@ -168,7 +165,7 @@ tasmin[[1:6]] - tas[[1:6]]
 writeCDF(tas, "02_data/02_processed/tas.nc", varname = "tas", longname = "Mean Temperature", overwrite = TRUE, unit = "K", zname = "time", prec = "float")
 
 # create uwind
-uwind <- rast("02_data/01_inputs/trace.36.400BP-1990CE.cam2.h0.U.2160101-2204012.Sahul.1900_1989CE.nc", "U")
+uwind <- rast("02_data/01_inputs/trace.36.400BP-1990CE.cam2.h0.U.2160101-2204012.Sahul.1600_1989CE.nc", "U")
 ## need U @ sea-level (993 hPa [z=26])
 uwind_ind <- round(as.numeric(sapply(strsplit(names(uwind), "=|_"), "[", 3)))
 uwind_ind <- which(uwind_ind == 993)
@@ -182,7 +179,7 @@ uwind
 writeCDF(uwind, "02_data/02_processed/uwind.nc", varname = "U", longname = "Zonal wind", overwrite = TRUE, unit = "m/s", zname = "time", prec = "float")
 
 # create vwind
-vwind <- rast("02_data/01_inputs/trace.36.400BP-1990CE.cam2.h0.V.2160101-2204012.Sahul.1900_1989CE.nc", "V")
+vwind <- rast("02_data/01_inputs/trace.36.400BP-1990CE.cam2.h0.V.2160101-2204012.Sahul.1600_1989CE.nc", "V")
 ## need V @ sea-level (993 hPa [z=26])
 vwind_ind <- round(as.numeric(sapply(strsplit(names(vwind), "=|_"), "[", 3)))
 vwind_ind <- which(vwind_ind == 993)
@@ -196,7 +193,7 @@ vwind
 writeCDF(vwind, "02_data/02_processed/vwind.nc", varname = "V", longname = "Meridional wind", overwrite = TRUE, unit = "m/s", zname = "time", prec = "float")
 
 # create zg_high
-zg_high <- rast("02_data/01_inputs/trace.36.400BP-1990CE.cam2.h0.Z3.2160101-2204012.Sahul.1900_1989CE.nc", "Z3")
+zg_high <- rast("02_data/01_inputs/trace.36.400BP-1990CE.cam2.h0.Z3.2160101-2204012.Sahul.1600_1989CE.nc", "Z3")
 ## need zg @ [z=20]
 zg_high_ind <- round(as.numeric(sapply(strsplit(names(zg_high), "=|_"), "[", 3)))
 zg_high_ind <- which(zg_high_ind == 601)
@@ -210,7 +207,7 @@ zg_high
 writeCDF(zg_high, "02_data/02_processed/zg_high.nc", varname = "z3", longname = "Geopotential Height", overwrite = TRUE, unit = "m", zname = "time", prec = "float")
 
 # create zg_low
-zg_low <- rast("02_data/01_inputs/trace.36.400BP-1990CE.cam2.h0.Z3.2160101-2204012.Sahul.1900_1989CE.nc", "Z3")
+zg_low <- rast("02_data/01_inputs/trace.36.400BP-1990CE.cam2.h0.Z3.2160101-2204012.Sahul.1600_1989CE.nc", "Z3")
 ## need zg @z=26
 zg_low_ind <- round(as.numeric(sapply(strsplit(names(zg_low), "=|_"), "[", 3)))
 zg_low_ind <- which(zg_low_ind == 993)
@@ -228,7 +225,7 @@ writeCDF(zg_low, "02_data/02_processed/zg_low.nc", varname = "z3", longname = "G
 # quick lapse rate
 # l = tl-th/zh-zl
 (ta_low[[1:6]] - ta_high[[1:6]]) / (zg_high[[1:6]] - zg_low[[1:6]])
-plot((ta_low[[1:6]] - ta_high[[1:6]]) / (zg_high[[1:6]] - zg_low[[1:6]]), fun = function() lines(land), range = c(0, 0.008))
+plot((ta_low[[1:6]] - ta_high[[1:6]]) / (zg_high[[1:6]] - zg_low[[1:6]]), fun = function() lines(land), range = c(0, 0.008), fill_range = TRUE)
 
 # Create oro
 oro <- rast("02_data/01_inputs/TraCE21_elevation.nc") * 1
@@ -266,9 +263,21 @@ writeCDF(oro, "02_data/02_processed/oro.nc", varname = "elevation", longname = "
 land <- vect(rnaturalearthhires::countries10)
 
 # oro_high <- rast("raw/Sahul_contemporary_elev.nc")
-oro_high <- rast("/mnt/Data/CHELSA_Trace21/Input/CHELSA_TraCE21k_dem_20_V1.0.tif")
+in_oro <- list.files("/mnt/Data/CHELSA_Trace21/Input",
+     full.names = TRUE, pattern = ".tif"
+)
+# match to timesteps for 1600 onwards (https://chelsa-climate.org/chelsa-trace21k/)
+pattern <- "CHELSA_TraCE21k_dem_(17|18|19|20)_V1\\.0\\.tif$"
+in_oro <- grep(pattern, in_oro, value = TRUE)
+oro_high <- rast(lapply(in_oro, rast))
 oro_high <- crop(oro_high, ext(oro), snap = "out")
 oro_high
+
+oro_high_check <- oro_high
+oro_high_check <- ifel(!is.na(oro_high_check), 1, 0)
+oro_high_check <- app(oro_high_check, sum, na.rm = TRUE)
+plot(oro_high_check) # 0/4 == no change in land/sea mask
+
 # oro_high <- ifel(oro_high < 0, 0, oro_high)
 plot(oro_high,
      col = col_pal,
@@ -282,7 +291,7 @@ tmp_rst <- rast(
      crs = "EPSG:4326"
 )
 tmp_rst
-oro_4 <- project(oro_high, tmp_rst,
+oro_4 <- project(oro_high[[1]], tmp_rst,
      method = "average",
      use_gdal = TRUE
 )
@@ -292,7 +301,7 @@ plot(oro_4,
      breaks = c(-6000, -4000, -2000, -1000, -500, -100, 0, 100, 500, 1500, 2000, 4000),
      fun = function() lines(land, col = "#000000", lwd = 1.5)
 )
-oro_4 <- setValues(oro_4, round(values(oro_4), 1))
+oro_4 <- setValues(oro_4, round(values(oro_4), 3))
 units(oro_4) <- "m"
 varnames(oro_4) <- "Orographic elevation"
 crs(oro_4) <- "EPSG:4326"
@@ -314,19 +323,6 @@ template_raster <- rast(
 )
 sahul_prj <- "EPSG:3395"
 
-# sahul_prj <- 'PROJCS["Lambert_Azimuthal_Sahul",
-#  GEOGCS["GCS_WGS_1984",
-#   DATUM["D_WGS_1984",
-#    SPHEROID["WGS_1984",6378137.0,298.257223563]],
-#   PRIMEM["Greenwich",0.0],
-#   UNIT["Degree",0.0174532925199433]],
-#  PROJECTION["Lambert_Azimuthal_Equal_Area"],
-#  PARAMETER["False_Easting",0.0],
-#  PARAMETER["False_Northing",0.0],
-#  PARAMETER["Central_Meridian",133],
-#  PARAMETER["Latitude_Of_Origin",-21.5],
-#  UNIT["Meter",1.0]]'
-
 template_raster <- project(template_raster, sahul_prj,
      method = "near",
      res = 4000
@@ -341,7 +337,6 @@ merc_template <- project(oro_4,
      method = "average"
 )
 merc_template
-merc_template <- setValues(merc_template, round(values(merc_template), 1))
 plot(merc_template,
      col = col_pal,
      breaks = c(-6000, -4000, -2000, -1000, -500, -100, 0, 100, 500, 1500, 2000, 4000),
