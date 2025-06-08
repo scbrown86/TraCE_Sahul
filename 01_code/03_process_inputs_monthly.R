@@ -74,10 +74,10 @@ varnames(pr) <- "rainfall"
 names(pr) <- format(time(pr), "%b%Y")
 crs(pr) <- "EPSG:4326"
 pr
-par(mfrow = c(1, 2))
-plot(pr[[1]], fun = function() lines(land, col = "#FFFFFF"), main = "Jan 1600")
-plot(app(pr[[1:12]] * 86400 * c(31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31), sum), fun = function() lines(land, col = "#FFFFFF"), main = "1600 total")
-par(mfrow = c(1, 1))
+# par(mfrow = c(1, 2))
+# plot(pr[[1]], fun = function() lines(land, col = "#FFFFFF"), main = "Jan 1600")
+# plot(app(pr[[1:12]] * 86400 * c(31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31), sum), fun = function() lines(land, col = "#FFFFFF"), main = "1600 total")
+# par(mfrow = c(1, 1))
 writeCDF(pr, "02_data/02_processed/pr.nc",
      varname = "pr", longname = "precipitation",
      overwrite = TRUE,
@@ -146,9 +146,9 @@ tasmin
 # plot(tasmin[[1080]])
 # plot(tasmin[[1080]]-273.15)
 writeCDF(tasmin, "02_data/02_processed/tasmin.nc", varname = "tasmin", longname = "Minimum Temperature", overwrite = TRUE, unit = "K", zname = "time", prec = "float")
-mask(tasmax[[1:6]] - tasmin[[1:6]], land)
-mask(tasmax[[1:6]] - tasmin[[1:6]], land, inverse = TRUE)
-plot(mask(tasmax[[1:6]] - tasmin[[1:6]], land), fun = function() lines(land), range = c(0, 50))
+# mask(tasmax[[1:6]] - tasmin[[1:6]], land)
+# mask(tasmax[[1:6]] - tasmin[[1:6]], land, inverse = TRUE)
+# plot(mask(tasmax[[1:6]] - tasmin[[1:6]], land), fun = function() lines(land), range = c(0, 50))
 
 # create tas
 tas <- rast("02_data/01_inputs/trace.36.400BP-1990CE.cam2.h0.TS.2160101-2204012.Sahul.1600_1989CE.nc", "TS")
@@ -162,14 +162,14 @@ tas
 # plot(tas[[1080]]-273.15)
 tasmax[[1:6]] - tas[[1:6]]
 tasmin[[1:6]] - tas[[1:6]]
-writeCDF(tas, "02_data/02_processed/tas.nc", varname = "tas", longname = "Mean Temperature", overwrite = TRUE, unit = "K", zname = "time", prec = "float")
+# writeCDF(tas, "02_data/02_processed/tas.nc", varname = "tas", longname = "Mean Temperature", overwrite = TRUE, unit = "K", zname = "time", prec = "float")
 
 # create uwind
 uwind <- rast("02_data/01_inputs/trace.36.400BP-1990CE.cam2.h0.U.2160101-2204012.Sahul.1600_1989CE.nc", "U")
 ## need U @ sea-level (993 hPa [z=26])
-uwind_ind <- round(as.numeric(sapply(strsplit(names(uwind), "=|_"), "[", 3)))
-uwind_ind <- which(uwind_ind == 993)
-uwind <- uwind[[uwind_ind]]
+# uwind_ind <- round(as.numeric(sapply(strsplit(names(uwind), "=|_"), "[", 3)))
+# uwind_ind <- which(uwind_ind == 993)
+# uwind <- uwind[[uwind_ind]]
 time(uwind) <- time(huss)
 units(uwind) <- "m/s"
 varnames(uwind) <- "Zonal wind"
@@ -181,9 +181,9 @@ writeCDF(uwind, "02_data/02_processed/uwind.nc", varname = "U", longname = "Zona
 # create vwind
 vwind <- rast("02_data/01_inputs/trace.36.400BP-1990CE.cam2.h0.V.2160101-2204012.Sahul.1600_1989CE.nc", "V")
 ## need V @ sea-level (993 hPa [z=26])
-vwind_ind <- round(as.numeric(sapply(strsplit(names(vwind), "=|_"), "[", 3)))
-vwind_ind <- which(vwind_ind == 993)
-vwind <- vwind[[vwind_ind]]
+# vwind_ind <- round(as.numeric(sapply(strsplit(names(vwind), "=|_"), "[", 3)))
+# vwind_ind <- which(vwind_ind == 993)
+# vwind <- vwind[[vwind_ind]]
 time(vwind) <- time(huss)
 units(vwind) <- "m/s"
 varnames(vwind) <- "Meridional wind"
@@ -203,6 +203,7 @@ units(zg_high) <- "m"
 varnames(zg_high) <- "Geopotential Height (above sea level)"
 names(zg_high) <- format(time(zg_high), "%b%Y")
 crs(zg_high) <- "EPSG:4326"
+depth(zg_high) <- NULL
 zg_high
 writeCDF(zg_high, "02_data/02_processed/zg_high.nc", varname = "z3", longname = "Geopotential Height", overwrite = TRUE, unit = "m", zname = "time", prec = "float")
 
@@ -217,8 +218,9 @@ units(zg_low) <- "m"
 varnames(zg_low) <- "Geopotential Height (above sea level)"
 names(zg_low) <- format(time(zg_low), "%b%Y")
 crs(zg_low) <- "EPSG:4326"
+depth(zg_low) <- NULL
 zg_low
-plot(zg_low[[1:6]])
+# plot(zg_low[[1:6]])
 zg_low[[1:6]] - zg_high[[1:6]] # should all be negative
 writeCDF(zg_low, "02_data/02_processed/zg_low.nc", varname = "z3", longname = "Geopotential Height", overwrite = TRUE, unit = "m", zname = "time", prec = "float")
 

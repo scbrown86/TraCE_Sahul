@@ -28,14 +28,14 @@ for file in ./raw/monthly/*/*.nc; do
     oname="$(basename "$infile" .nc)"
     outname="${output_dir}${oname}.1600_1989CE.nc"
     # Process based on variable name
-    if [[ "$var" == "T" || "$var" == "U" || "$var" == "V" || "$var" == "Z3" ]]; then
+    if [[ "$var" == "T" || "$var" == "Z3" ]]; then
         cdo -setreftime,1600-01-16,,1month \
             -settaxis,1600-01-16,,1month \
             -setcalendar,365_day \
             -seltimestep,601/5280 \
             -sellevidx,20,26 \
             "$infile" "$outname"
-    elif [[ "$var" == "RELHUM" ]]; then
+    elif [[ "$var" == "RELHUM" || "$var" == "U" || "$var" == "V" ]]; then
         cdo --reduce_dim \
             -setreftime,1600-01-16,,1month \
             -settaxis,1600-01-16,,1month \
