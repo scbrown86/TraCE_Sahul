@@ -40,7 +40,7 @@ for foldername in "${folders[@]}"; do
     if [ -d "$folder_path" ]; then
         file_count=$(find "$folder_path" -maxdepth 1 -type f -name "*.nc" | wc -l)
         if [ "$file_count" -eq "$END" ]; then
-            echo "Processing $foldername with 1080 files..."
+            echo "Processing $foldername with $file_count files (expected: $END)..."
             cd "$folder_path" || {
                 echo "Failed to enter $folder_path"
                 continue
@@ -50,7 +50,7 @@ for foldername in "${folders[@]}"; do
             # create a text file to ensure order is correct!
             ls -v1 "$folder_path" >input_order.txt
         else
-            echo "Found $file_count files. Expected 1080"
+            echo "Skipping $foldername — found $file_count files, expected $END"
         fi
     else
         echo "Directory $folder_path does not exist."
