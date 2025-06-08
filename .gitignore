@@ -47,3 +47,6 @@ po/*~
 
 # RStudio Connect folder
 rsconnect/
+
+# ignore outputs
+02_data/03_CHELSA_paleo/*

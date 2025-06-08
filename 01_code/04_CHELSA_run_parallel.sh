@@ -2,21 +2,21 @@
 conda deactivate
 conda activate CHELSA_paleo
 
-END=12
+END=4680
 START=1
 START_TIME=$(date +%s)
 
-export SINGULARITY_IMG="/home/dafcluster4/chelsa_paleo_dirk/chelsa_paleo/singularity/chelsa_paleo.sif"
-export SCRIPT="/home/dafcluster4/chelsa_paleo_dirk/chelsa_paleo/src/chelsa.py"
-export INPUT_DIR="/mnt/Data/CHELSA_1600_1990/INPUT_PALEO/"
-export OUTPUT_DIR="/mnt/Data/CHELSA_1600_1990/OUTPUT_PALEO/"
-export SCRATCH_DIR="/home/dafcluster4/scratch/"
+export SINGULARITY_IMG="/home/dafcluster4/chelsa_paleo/singularity/chelsa_paleo.sif"
+export SCRIPT="/home/dafcluster4/chelsa_paleo/src/chelsa.py"
+export INPUT_DIR="/home/dafcluster4/Documents/GitHub/TraCE_Sahul/02_data/03_CHELSA_paleo/"
+export OUTPUT_DIR="/home/dafcluster4/Documents/GitHub/TraCE_Sahul/02_data/03_CHELSA_paleo/out/"
+export SCRATCH_DIR="/home/dafcluster4/scratch"
 
-singularity exec $SINGULARITY_IMG python $SCRIPT -t 1 -i $INPUT_DIR -o $OUTPUT_DIR -tmp $SCRATCH_DIR
+# singularity exec $SINGULARITY_IMG python $SCRIPT -t 1 -i $INPUT_DIR -o $OUTPUT_DIR -tmp $SCRATCH_DIR
 
-seq $END -1 $START | parallel --bar -j 12 -k ' # will star at 12/1989 and work backwards
+seq $END -1 $START | parallel --bar -j 12 -k ' # will start at 12/1989 and work backwards
     TMP_PREFIX=$(printf "%04d" {}) &&
-    TMP_DIR="$SCRATCH_DIR/tmp_$TMP_PREFIX" &&
+    TMP_DIR="$SCRATCH_DIR/tmp_$TMP_PREFIX/" &&
     mkdir -p "$TMP_DIR" &&
     singularity exec "$SINGULARITY_IMG" python "$SCRIPT" -t {} -i "$INPUT_DIR" -o "$OUTPUT_DIR" -tmp "$TMP_DIR" > /dev/null 2>&1 &&
     rm -rf "$SCRATCH_DIR/tmp_$TMP_PREFIX"*
