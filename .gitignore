@@ -48,5 +48,12 @@ po/*~
 # RStudio Connect folder
 rsconnect/
 
-# ignore outputs
-02_data/03_CHELSA_paleo/*
+# ignore output netcdf in any subfolder
+02_data/03_CHELSA_paleo/**/*.nc
+
+# Allow subfolders to be included
+!02_data/03_CHELSA_paleo/**/
+
+# Allow .txt files inside the output subfolders (input_order.txt)
+!02_data/03_CHELSA_paleo/**/*.txt
+!02_data/03_CHELSA_paleo/*.txt

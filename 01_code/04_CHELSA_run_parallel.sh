@@ -34,7 +34,7 @@ conda activate nco_stable
 
 folders=("pr" "tas" "tasmax" "tasmin")
 
-# Loop through each folder
+# Loop through each folder and concatenate files
 for foldername in "${folders[@]}"; do
     folder_path="$OUTPUT_DIR/$foldername"
     if [ -d "$folder_path" ]; then
@@ -45,10 +45,11 @@ for foldername in "${folders[@]}"; do
                 echo "Failed to enter $folder_path"
                 continue
             }
-            output_file="${folder_path}/CHELSA_${foldername}_1900_1990.nc"
-            cdo invertlat -settaxis,1900-01-16,,1month -setcalendar,365_day -cat $(ls -v1 "$folder_path") "$output_file"
+            output_file="${folder_path}/CHELSA_${foldername}_1600_1990.nc"
             # create a text file to ensure order is correct!
             ls -v1 "$folder_path" >input_order.txt
+            # concatenate
+            cdo settaxis,1600-01-16,,1month -setcalendar,365_day -cat $(ls -v1 "$folder_path"/*.nc) "$output_file"
         else
             echo "Skipping $foldername — found $file_count files, expected $END"
         fi
