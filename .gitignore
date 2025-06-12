@@ -61,3 +61,4 @@ rsconnect/
 # ignore chelsa (v1.2) and TrACE climatology and deltas
 02_data/02_processed/**/*.tif
 02_data/02_processed/**/*.nc
+delta_remapped_tmp.nc
