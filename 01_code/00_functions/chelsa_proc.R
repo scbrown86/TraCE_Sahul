@@ -6,6 +6,7 @@ chelsa_proc <- function(variable, dir, outdir, type = "\\.tif$",
                         ...) {
   require(pbapply)
   require(gtools)
+  require(terra)
   match.arg(arg = variable, choices = c("prec", "tmax", "tmin", "tmean"))
   v1 <- variable # keep old variable name
   from <- c("prec", "tmax", "tmin", "tmean")
@@ -20,7 +21,6 @@ chelsa_proc <- function(variable, dir, outdir, type = "\\.tif$",
   ann_CHELSA <- pbsapply(years, function(year, ...) {
     fil.list.annual <- fil.list[grepl(pattern = year, fil.list)]
     out_fil <- file.path(outdir, sprintf("CHELSA_%s_%s_V.1.2.tif", variable, year))
-    # out_filn <- file.path(outdir, sprintf("CHELSA_%s_%s_V.1.2.nc", variable, year))
     if (file.exists(out_fil) & load_exist) {
       return(out_fil)
     }
@@ -29,7 +29,7 @@ chelsa_proc <- function(variable, dir, outdir, type = "\\.tif$",
     }
     chelsa <- rast(fil.list.annual)
     # crop CHELSA to extent of template raster and load into memory
-    chelsa <- crop(chelsa, tras_ext)
+    chelsa <- crop(chelsa, tras_ext, snap = "out")
     if (!is.null(mask)) {
       if (inherits(x = mask, "PackedSpatVector")) {
         mask <- terra::unwrap(mask)
@@ -52,7 +52,7 @@ chelsa_proc <- function(variable, dir, outdir, type = "\\.tif$",
     } else if (variable %in% c("tasmin", "tasmax", "tas")) {
       # stored as K/10. Convert to celcius
       chelsa <- setValues(chelsa, round((terra::values(chelsa) / 10) - 273.15, 2))
-      units(chelsa) <- "degC"
+      units(chelsa) <- "deg_C"
       varnames(chelsa) <- variable
       time(chelsa) <- seq(as.Date(paste0(year, "-01-16")), by = "months", l = 12)
       names(chelsa) <- format(time(chelsa), "%b%Y")
@@ -62,19 +62,11 @@ chelsa_proc <- function(variable, dir, outdir, type = "\\.tif$",
         gdal = c("COMPRESS=LZW", "TFW=NO", "PREDICTOR=3"),
         overwrite = TRUE
       )
-      # writeCDF(chelsa, out_filn,
-      #   varname = "pr", long_name = "rainfall",
-      #   unit = "kg/m2/s", zname = "time", prec = "float"
-      # )
     } else if (variable %in% c("tasmin", "tasmax", "tas")) {
       writeRaster(chelsa, out_fil,
         gdal = c("COMPRESS=LZW", "TFW=NO", "PREDICTOR=3"),
         overwrite = TRUE
       )
-      # writeCDF(chelsa, out_filn,
-      #   varname = variable, long_name = variable,
-      #   unit = "deg_C", zname = "time", prec = "float"
-      # )
     }
     return(out_fil)
   },

@@ -57,3 +57,7 @@ rsconnect/
 # Allow .txt files inside the output subfolders (input_order.txt)
 !02_data/03_CHELSA_paleo/**/*.txt
 !02_data/03_CHELSA_paleo/*.txt
+
+# ignore chelsa (v1.2) and TrACE climatology and deltas
+02_data/02_processed/**/*.tif
+02_data/02_processed/**/*.nc
