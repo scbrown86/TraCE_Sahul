@@ -39,7 +39,6 @@ for var in "${variables[@]}"; do
     if [[ "$var" == "pr" ]]; then
         # if pr, convert to mm/month after applying bias correction
         cdo -b F32 \
-            -pack \
             -setreftime,1600-01-16,,1month \
             -settaxis,1600-01-16,,1month \
             -setcalendar,365_day \
@@ -50,7 +49,6 @@ for var in "${variables[@]}"; do
     else
         # if temperature, convert to celcius after applying bias correction
         cdo -b F32 \
-            -pack \
             -setreftime,1600-01-16,,1month \
             -settaxis,1600-01-16,,1month \
             -setcalendar,365_day \
