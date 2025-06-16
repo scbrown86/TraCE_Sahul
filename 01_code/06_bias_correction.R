@@ -13,19 +13,22 @@ plot(land)
 
 # load in the fine scale deltas
 deltas_fine <- list.files("02_data/02_processed/deltas",
-                          pattern = ".nc$", full.names = TRUE)
+  pattern = ".nc$", full.names = TRUE
+)
+deltas_fine <- deltas_fine[grepl("ncdf4", deltas_fine)]
 deltas_fine <- lapply(deltas_fine, rast)
 names(deltas_fine) <- c("pr", "tas", "tasmax", "tasmin")
 deltas_fine
 
 # load in the brown downscaled data
-brown <- list.files("02_data/03_CHELSA_paleo/out/",
-                    recursive = TRUE, pattern = "1900_1990.nc$",
-                    full.names = TRUE)
+brown <- list.files("02_data/03_CHELSA_paleo/out",
+  recursive = TRUE, pattern = "1600_1990.nc$",
+  full.names = TRUE
+)
 brown
 brown <- pblapply(brown, function(i) {
   r <- rast(i)
-  time(r) <- seq(as.Date("1900-01-16"), by = "month", l = nlyr(r))
+  time(r) <- seq(as.Date("1600-01-16"), by = "month", l = nlyr(r))
   r_u <- units(r)[1]
   r_v <- varnames(r[[1]])
   l_v <- longnames(r[[1]])
@@ -37,15 +40,15 @@ brown <- pblapply(brown, function(i) {
   }
   varnames(r) <- r_v
   longnames(r) <- l_v
-  time(r) <- seq(as.Date("1900-01-16"), by = "month", l = nlyr(r))
+  time(r) <- seq(as.Date("1600-01-16"), by = "month", l = nlyr(r))
   names(r) <- format(time(r), "%b%Y")
   return(r)
 })
 names(brown) <- c("pr", "tas", "tasmax", "tasmin")
 brown
-par(mfrow = c(2,2))
+par(mfrow = c(2, 2))
 sapply(brown, function(i) plot(i[[1]]))
-par(mfrow = c(1,1))
+par(mfrow = c(1, 1))
 nlyr(brown$pr) %% nlyr(deltas_fine$pr)
 
 brown$pr <- brown$pr * deltas_fine$pr
@@ -59,18 +62,18 @@ units(brown$tas) <- units(brown$tasmax) <- units(brown$tasmin) <- "deg_C"
 
 brown
 
-par(mfrow = c(2,2))
+par(mfrow = c(2, 2))
 sapply(brown, function(i) plot(i[[1]]))
-par(mfrow = c(1,1))
+par(mfrow = c(1, 1))
 
 # save to netCDF
 sapply(seq_along(brown), function(i) {
   r <- brown[[i]]
   writeCDF(
-    x = r,
-    filename = sprintf("02_data/03_CHELSA_paleo/out/%s_downscaled_and_bc.nc", varnames(r[[1]])),
-    varname = varnames(r[[1]]), longname = longnames(r[[1]]),
-    unit = units(r[[1]]), zname = "time", prec = "float",
+    x = brown[[i]],
+    filename = sprintf("02_data/03_CHELSA_paleo/out/%s/CHELSA_%s_1600_1990_biascorr.nc", varnames(brown[[i]][[1]]), varnames(brown[[i]][[1]])),
+    varname = varnames(brown[[i]][[1]]), longname = longnames(brown[[i]][[1]]),
+    unit = units(brown[[i]][[1]]), zname = "time", prec = "float",
     overwrite = TRUE
   )
 })

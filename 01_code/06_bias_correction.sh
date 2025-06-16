@@ -15,7 +15,7 @@ variables=("pr" "tas" "tasmax" "tasmin")
 
 for var in "${variables[@]}"; do
     input_file=$(find "$input_base/$var" -type f -name "*_1600_1990.nc" | head -n 1)
-    delta_file=$(find "$delta_base" -type f -name "delta_fine_delta_${var}_climatology.nc" | head -n 1)
+    delta_file=$(find "$delta_base" -type f -name "delta_fine_delta_${var}_climatology_ncdf4.nc" | head -n 1)
     if [[ ! -f "$input_file" ]]; then
         echo "Input file for variable '$var' not found."
         continue
@@ -54,7 +54,7 @@ for var in "${variables[@]}"; do
             -setcalendar,365_day \
             -setunit,'deg_C' \
             -subc,-273.15 \
-            -add "$input_file" "$tmp_delta" "$output_file"
+            -add "$input_file" "$delta_file" "$output_file"
     fi
     # Clean up temporary file
     rm -f "$tmp_delta" "grid_desc.txt"
