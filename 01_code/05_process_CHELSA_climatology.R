@@ -8,7 +8,8 @@ library(qgisprocess)
 
 # safe
 safe_spline <- purrr::safely(qgisprocess::qgis_run_algorithm,
-    otherwise = NULL, quiet = TRUE)
+  otherwise = NULL, quiet = TRUE
+)
 
 land <- vect(rnaturalearthhires::countries10)
 land <- crop(land, ext(105.0, 161.25, -52.5, 11.25))
@@ -22,18 +23,19 @@ source("01_code/00_functions/chelsa_proc.R")
 
 # load in CHELSA V1.2 data at original res
 # calculate averages between 1980 and 1989
-if (!dir.exists("02_data/02_processed/CHELSA")){
+if (!dir.exists("02_data/02_processed/CHELSA")) {
   dir.create("02_data/02_processed/CHELSA", recursive = TRUE)
 }
 processed_chelsa <- lapply(c("prec", "tmin", "tmax", "tmean"),
-                           FUN = chelsa_proc,
-                           mask = NULL,
-                           ymin = 1980, ymax = 1989,
-                           tras_ext = ext(105.0, 161.25, -52.5, 11.25),
-                           load_exist = TRUE,
-                           dir = "/mnt/Data/CHELSA/v1.2",
-                           outdir = "02_data/02_processed/CHELSA",
-                           cores = 5L)
+  FUN = chelsa_proc,
+  mask = NULL,
+  ymin = 1980, ymax = 1989,
+  tras_ext = ext(105.0, 161.25, -52.5, 11.25),
+  load_exist = TRUE,
+  dir = "/mnt/Data/CHELSA/v1.2",
+  outdir = "02_data/02_processed/CHELSA",
+  cores = 5L
+)
 names(processed_chelsa) <- c("pr", "tasmin", "tasmax", "tas")
 str(processed_chelsa)
 
@@ -55,7 +57,8 @@ chelsa_climatologies <- c(
   "02_data/02_processed/CHELSA/CHELSA_pr_climatology.nc",
   "02_data/02_processed/CHELSA/CHELSA_tasmin_climatology.nc",
   "02_data/02_processed/CHELSA/CHELSA_tasmax_climatology.nc",
-  "02_data/02_processed/CHELSA/CHELSA_tas_climatology.nc")
+  "02_data/02_processed/CHELSA/CHELSA_tas_climatology.nc"
+)
 
 if (!all(file.exists(chelsa_climatologies))) {
   pr_avg <- tapp(pr_avg, idx, mean, cores = 12L)
@@ -72,27 +75,36 @@ if (!all(file.exists(chelsa_climatologies))) {
   # temperature units
   units(tmn_avg) <- units(tmx_avg) <- units(tas_avg) <- "deg_C"
   writeCDF(pr_avg, "02_data/02_processed/CHELSA/CHELSA_pr_climatology.nc",
-           varname = "pr", longname = "precipitation", # compression = 6L,
-           unit = "kg/m2/s", zname = "time", prec = "float",
-           overwrite = TRUE)
+    varname = "pr", longname = "precipitation", # compression = 6L,
+    unit = "kg/m2/s", zname = "time", prec = "float",
+    overwrite = TRUE
+  )
   writeCDF(tmn_avg, "02_data/02_processed/CHELSA/CHELSA_tasmin_climatology.nc",
-           varname = "tasmin",
-           longname = "minimum near surface air temperature",
-           # compression = 6L,
-           unit = "deg_C", zname = "time", prec = "float",
-           overwrite = TRUE)
+    varname = "tasmin",
+    longname = "minimum near surface air temperature",
+    # compression = 6L,
+    unit = "deg_C", zname = "time", prec = "float",
+    overwrite = TRUE
+  )
   writeCDF(tmx_avg, "02_data/02_processed/CHELSA/CHELSA_tasmax_climatology.nc",
-           varname = "tasmax",
-           longname = "maximum near surface air temperature",
-           # compression = 6L,
-           unit = "deg_C", zname = "time", prec = "float",
-           overwrite = TRUE)
+    varname = "tasmax",
+    longname = "maximum near surface air temperature",
+    # compression = 6L,
+    unit = "deg_C", zname = "time", prec = "float",
+    overwrite = TRUE
+  )
   writeCDF(tas_avg, "02_data/02_processed/CHELSA/CHELSA_tas_climatology.nc",
-           varname = "tas",
-           longname = "mean near surface air temperature",
-           # compression = 6L,
-           unit = "deg_C", zname = "time", prec = "float",
-           overwrite = TRUE)
+    varname = "tas",
+    longname = "mean near surface air temperature",
+    # compression = 6L,
+    unit = "deg_C", zname = "time", prec = "float",
+    overwrite = TRUE
+  )
+} else {
+  pr_avg <- rast("02_data/02_processed/CHELSA/CHELSA_pr_climatology.nc")
+  tmn_avg <- rast("02_data/02_processed/CHELSA/CHELSA_tasmin_climatology.nc")
+  tmx_avg <- rast("02_data/02_processed/CHELSA/CHELSA_tasmax_climatology.nc")
+  tas_avg <- rast("02_data/02_processed/CHELSA/CHELSA_tas_climatology.nc")
 }
 
 # convert the CHELSA climatology data to 0.5 degree using b-splines
@@ -104,67 +116,85 @@ varnames(fine_clim[[3]]) <- "tasmin"
 varnames(fine_clim[[4]]) <- "tasmax"
 fine_clim
 coarse_chelsa_clim <- lapply(fine_clim, interpolate_bspline,
-                             output_dir = "02_data/02_processed/CHELSA",
-                             bspline_ext = ext(105.0, 161.25, -52.5, 11.25),
-                             target_size = 0.5,
-                             parallel_cores = 12,
-                             start_date = as.Date("1985-01-16"),
-                             outname_template = "CHELSA_coarse_%s_climatology.nc",
-                             load_exist = TRUE)
+  output_dir = "02_data/02_processed/CHELSA",
+  bspline_ext = ext(105.0, 161.25, -52.5, 11.25),
+  target_size = 0.5,
+  parallel_cores = 12,
+  start_date = as.Date("1985-01-16"),
+  outname_template = "CHELSA_coarse_%s_climatology.nc",
+  load_exist = TRUE
+)
 names(coarse_chelsa_clim) <- c("pr", "tas", "tasmin", "tasmax")
 coarse_chelsa_clim
 
 #### TRACE ####
 # load in the downscaled Brown data
 brown <- list.files("02_data/03_CHELSA_paleo/out",
-                    recursive = TRUE, pattern = "1600_1990.nc$",
-                    full.names = TRUE)
-# climatologies
-brown <- pblapply(brown, function(i) {
-  r <- rast(i)
-  time(r) <- seq(as.Date("1600-01-16"), by = "month", l = nlyr(r))
-  r_u <- units(r)[1]
-  r_v <- varnames(r[[1]])
-  l_v <- longnames(r[[1]])
-  r <- r[[which(time(r) >= "1980-01-01")]] # 1980 onwards only
-  r <- tapp(r, "months", "mean")
-  units(r) <- r_u
-  crs(r) <- "EPSG:4326"
-  if (r_u == "K") {
-    r <- setValues(r, values(r)-273.15)
-    units(r) <- "deg_C"
-  }
-  varnames(r) <- r_v
-  longnames(r) <- l_v
-  time(r) <- seq(as.Date("1985-01-16"), by = "month", l = 12)
-  names(r) <- month.abb
-  return(r)
-})
-names(brown) <- c("pr", "tas", "tasmax", "tasmin")
-brown
+  recursive = TRUE, pattern = "1600_1990.nc$",
+  full.names = TRUE
+)
 
-# convert downscaled TraCE climatology to 0.5 degrees
-if (!dir.exists("02_data/02_processed/TRACE")){
-  dir.create("02_data/02_processed/TRACE", recursive = TRUE)
+brown_climatologies <- c(
+  "02_data/02_processed/TRACE/TraCE_coarse_pr_climatology.nc",
+  "02_data/02_processed/TRACE/TraCE_coarse_tas_climatology.nc",
+  "02_data/02_processed/TRACE/TraCE_coarse_tasmax_climatology.nc",
+  "02_data/02_processed/TRACE/TraCE_coarse_tasmin_climatology.nc"
+)
+
+if (!all(file.exists(brown_climatologies))) {
+  # climatologies
+  brown <- pblapply(brown, function(i) {
+    r <- rast(i)
+    time(r) <- seq(as.Date("1600-01-16"), by = "month", l = nlyr(r))
+    r_u <- units(r)[1]
+    r_v <- varnames(r[[1]])
+    l_v <- longnames(r[[1]])
+    r <- r[[which(time(r) >= "1980-01-01")]] # 1980 onwards only
+    r <- tapp(r, "months", "mean")
+    units(r) <- r_u
+    crs(r) <- "EPSG:4326"
+    if (r_u == "K") {
+      r <- setValues(r, values(r) - 273.15)
+      units(r) <- "deg_C"
+    }
+    varnames(r) <- r_v
+    longnames(r) <- l_v
+    time(r) <- seq(as.Date("1985-01-16"), by = "month", l = 12)
+    names(r) <- month.abb
+    return(r)
+  })
+  names(brown) <- c("pr", "tas", "tasmax", "tasmin")
+  brown
+  # convert downscaled TraCE climatology to 0.5 degrees
+  if (!dir.exists("02_data/02_processed/TRACE")) {
+    dir.create("02_data/02_processed/TRACE", recursive = TRUE)
+  }
+  coarse_trace_clim <- lapply(brown, interpolate_bspline,
+    output_dir = "02_data/02_processed/TRACE",
+    bspline_ext = ext(105.0, 161.25, -52.5, 11.25),
+    target_size = 0.5,
+    parallel_cores = 12,
+    start_date = as.Date("1985-01-16"),
+    outname_template = "TraCE_coarse_%s_climatology.nc",
+    load_exist = TRUE
+  )
+  names(coarse_trace_clim) <- c("pr", "tas", "tasmax", "tasmin")
+  coarse_trace_clim
+} else {
+  coarse_trace_clim <- lapply(brown_climatologies, rast)
+  names(coarse_trace_clim) <- c("pr", "tas", "tasmax", "tasmin")
 }
-coarse_trace_clim <- lapply(brown, interpolate_bspline,
-                             output_dir = "02_data/02_processed/TRACE",
-                             bspline_ext = ext(105.0, 161.25, -52.5, 11.25),
-                             target_size = 0.5,
-                             parallel_cores = 12,
-                             start_date = as.Date("1985-01-16"),
-                             outname_template = "TraCE_coarse_%s_climatology.nc",
-                             load_exist = TRUE)
-names(coarse_trace_clim) <- c("pr", "tas", "tasmax", "tasmin")
 coarse_trace_clim
 
 #### DELTAS ####
 # create delta between the CHELSA and downscaled TraCE climatology
-rbind(minmax(coarse_chelsa_clim$pr*(c(31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)*86400)),
-      minmax(coarse_trace_clim$pr*(c(31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)*86400)))
+rbind(
+  minmax(coarse_chelsa_clim$pr * (c(31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31) * 86400)),
+  minmax(coarse_trace_clim$pr * (c(31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31) * 86400))
+)
 
-delta_pr <- (coarse_chelsa_clim$pr*(c(31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)*86400)+1)/
-  (coarse_trace_clim$pr*(c(31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)*86400)+1)
+delta_pr <- (coarse_chelsa_clim$pr * (c(31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31) * 86400) + 1) /
+  (coarse_trace_clim$pr * (c(31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31) * 86400) + 1)
 delta_pr
 plot(delta_pr, fun = function() lines(land, col = "#FFFFFF"))
 
@@ -181,26 +211,28 @@ delta_tasmax
 plot(delta_tasmax, fun = function() lines(land, col = "#FFFFFF"))
 
 # convert the delta back to 0.05 degrees using b-splines
-if (!dir.exists("02_data/02_processed/deltas")){
+if (!dir.exists("02_data/02_processed/deltas")) {
   dir.create("02_data/02_processed/deltas", recursive = TRUE)
 }
 deltas <- list(delta_pr, delta_tas, delta_tasmin, delta_tasmax)
 deltas_fine <- lapply(deltas, interpolate_bspline,
-                      output_dir = "02_data/02_processed/deltas",
-                      bspline_ext = ext(105.0, 161.25, -52.5, 11.25),
-                      target_size = 0.05,
-                      parallel_cores = 12,
-                      start_date = as.Date("1985-01-16"),
-                      outname_template = "delta_fine_%s_climatology.nc",
-                      load_exist = TRUE,
-                      delta = TRUE)
+  output_dir = "02_data/02_processed/deltas",
+  bspline_ext = ext(105.0, 161.25, -52.5, 11.25),
+  target_size = 0.05,
+  parallel_cores = 12,
+  start_date = as.Date("1985-01-16"),
+  outname_template = "delta_fine_%s_climatology.nc",
+  load_exist = TRUE,
+  delta = TRUE
+)
 names(deltas_fine) <- c("pr", "tas", "tasmin", "tasmax")
 deltas_fine
 
 # test adding the delta to brown downscaled
 brown_corrected <- lapply(list.files("02_data/03_CHELSA_paleo/out",
-                                     recursive = TRUE, pattern = "1600_1990.nc$",
-                                     full.names = TRUE), function(x) rast(x)[[1:12]])
+  recursive = TRUE, pattern = "1600_1990.nc$",
+  full.names = TRUE
+), function(x) rast(x)[[1:12]])
 names(brown_corrected) <- names(coarse_trace_clim)
 brown_corrected
 brown_corrected$pr <- brown_corrected$pr * deltas_fine$pr
@@ -213,10 +245,35 @@ plot(brown$pr, fun = function() lines(land, col = "#000000"))
 plot(brown_corrected$pr, fun = function() lines(land, col = "#000000"))
 
 plot(brown$tas, fun = function() lines(land, col = "#000000"))
-plot(brown_corrected$tas-273.15, fun = function() lines(land, col = "#000000"))
+plot(brown_corrected$tas - 273.15, fun = function() lines(land, col = "#000000"))
 
 plot(brown$tasmin, fun = function() lines(land, col = "#000000"))
-plot(brown_corrected$tasmin-273.15, fun = function() lines(land, col = "#000000"))
+plot(brown_corrected$tasmin - 273.15, fun = function() lines(land, col = "#000000"))
 
 plot(brown$tasmax, fun = function() lines(land, col = "#000000"))
-plot(brown_corrected$tasmax-273.15, fun = function() lines(land, col = "#000000"))
+plot(brown_corrected$tasmax - 273.15, fun = function() lines(land, col = "#000000"))
+
+# save the delta to netcdf
+source("01_code/00_functions/spatraster_to_netcdf.r")
+
+time(deltas_fine$pr, tstep = "months") <- 1:12
+time(deltas_fine$tas, tstep = "months") <- 1:12
+time(deltas_fine$tasmax, tstep = "months") <- 1:12
+time(deltas_fine$tasmin, tstep = "months") <- 1:12
+
+write_spatraster_ncdf(
+  deltas_fine$pr,
+  "02_data/02_processed/deltas/delta_fine_delta_pr_climatology_ncdf4.nc"
+)
+write_spatraster_ncdf(
+  deltas_fine$tas,
+  "02_data/02_processed/deltas/delta_fine_delta_tas_climatology_ncdf4.nc"
+)
+write_spatraster_ncdf(
+  deltas_fine$tasmax,
+  "02_data/02_processed/deltas/delta_fine_delta_tasmax_climatology_ncdf4.nc"
+)
+write_spatraster_ncdf(
+  deltas_fine$tasmin,
+  "02_data/02_processed/deltas/delta_fine_delta_tasmin_climatology_ncdf4.nc"
+)
