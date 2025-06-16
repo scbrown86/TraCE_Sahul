@@ -13,8 +13,7 @@ plot(land)
 
 # load in the fine scale deltas
 deltas_fine <- list.files("02_data/02_processed/deltas",
-  pattern = ".nc$", full.names = TRUE
-)
+  pattern = ".nc$", full.names = TRUE)
 deltas_fine <- deltas_fine[grepl("ncdf4", deltas_fine)]
 deltas_fine <- lapply(deltas_fine, rast)
 names(deltas_fine) <- c("pr", "tas", "tasmax", "tasmin")
@@ -23,11 +22,11 @@ deltas_fine
 # load in the brown downscaled data
 brown <- list.files("02_data/03_CHELSA_paleo/out",
   recursive = TRUE, pattern = "1600_1990.nc$",
-  full.names = TRUE
-)
+  full.names = TRUE)
 brown
 brown <- pblapply(brown, function(i) {
   r <- rast(i)
+  r <- r
   time(r) <- seq(as.Date("1600-01-16"), by = "month", l = nlyr(r))
   r_u <- units(r)[1]
   r_v <- varnames(r[[1]])
@@ -37,6 +36,11 @@ brown <- pblapply(brown, function(i) {
   if (r_u == "K") {
     r <- setValues(r, values(r) - 273.15)
     units(r) <- "deg_C"
+  }
+  if (r_u %in% c("kg/m2/s", "kg m-2 s-1")) {
+    month_days <- c(31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
+    r <- setValues(r, values(r) * (86400 * month_days))
+    units(r) <- "mm/month"
   }
   varnames(r) <- r_v
   longnames(r) <- l_v

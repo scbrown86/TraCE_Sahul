@@ -32,9 +32,9 @@ for var in "${variables[@]}"; do
     # Temporary remapped delta file
     tmp_delta="delta_remapped_tmp.nc"
     # Grid description of $delta_files is wrong (terra issue).
-    # Set it to lat/lon
+    # Set it to lat/lon. No regridding so NN is fine.
     cdo griddes $input_file >grid_desc.txt
-    cdo setgrid,grid_desc.txt $delta_file $tmp_delta
+    cdo remapnn,grid_desc.txt $delta_file $tmp_delta
     # Apply bias correction
     if [[ "$var" == "pr" ]]; then
         # if pr, convert to mm/month after applying bias correction
@@ -53,7 +53,7 @@ for var in "${variables[@]}"; do
             -settaxis,1600-01-16,,1month \
             -setcalendar,365_day \
             -setunit,'deg_C' \
-            -subc,-273.15 \
+            -subc,273.15 \
             -add "$input_file" "$delta_file" "$output_file"
     fi
     # Clean up temporary file
