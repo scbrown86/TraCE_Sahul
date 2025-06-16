@@ -1,0 +1,51 @@
+#!/bin/bash
+
+cd "/home/dafcluster4/Documents/GitHub/TraCE_Sahul/" || {
+    echo "Failed to change directory. Exiting."
+    exit 1
+}
+
+conda deactivate
+conda activate nco_stable
+
+# Base directories
+input_base="02_data/03_CHELSA_paleo/out"
+summary_dir="02_data/03_CHELSA_paleo/summary_stats"
+
+# Ensure summary output directory exists
+mkdir -p "$summary_dir"
+
+# List of variables
+variables=("pr" "tas" "tasmax" "tasmin")
+
+for var in "${variables[@]}"; do
+    input_file="$input_base/$var/CHELSA_${var}_1600_1990_biascorr.nc"
+
+    if [[ ! -f "$input_file" ]]; then
+        echo "Missing input for '$var': $input_file"
+        continue
+    fi
+
+    echo "Processing variable: $var"
+    # Annual and seasonal means
+    yearmean_file="$summary_dir/${var}_yearmean.nc"
+    seasmean_file="$summary_dir/${var}_seasmean.nc"
+    #   mermean_year_file="$summary_dir/${var}_yearmean_mermean.nc"
+    #   mermean_seas_file="$summary_dir/${var}_seasmean_mermean.nc"
+    cdo yearmean "$input_file" "$yearmean_file"
+    cdo seasmean "$input_file" "$seasmean_file"
+    #   cdo mermean "$yearmean_file" "$mermean_year_file"
+    #   cdo mermean "$seasmean_file" "$mermean_seas_file"
+    if [[ "$var" == "pr" ]]; then
+        # Annual and seasonal totals for precipitation
+        yearsum_file="$summary_dir/${var}_yearsum.nc"
+        seassum_file="$summary_dir/${var}_seassum.nc"
+        # mersum_year_file="$summary_dir/${var}_yearsum_mersum.nc"
+        # mersum_seas_file="$summary_dir/${var}_seassum_mersum.nc"
+        cdo -b F32 yearsum "$input_file" "$yearsum_file"
+        cdo -b F32 seassum "$input_file" "$seassum_file"
+        # cdo mersum "$yearsum_file" "$mersum_year_file"
+        # cdo mersum "$seassum_file" "$mersum_seas_file"
+    fi
+    echo "Finished summaries for: $var"
+done
