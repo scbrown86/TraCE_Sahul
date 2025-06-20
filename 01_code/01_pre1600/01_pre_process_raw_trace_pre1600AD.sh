@@ -128,16 +128,16 @@ for concat_file in "$output_root"/*/*Sahul.concat.nc; do
         rm -f $tmpfile
     done
     # now concatenate the files
-    # mapfile -t nc_files < <(ls -v1 "$outroot"/*.nc 2>/dev/null)
-    # # Save the order to text for checking
-    # printf '%s\n' "${nc_files[@]}" >"${outroot}/input_order.txt"
-    # file_count=${#nc_files[@]}
-    # if ((file_count == 2155)); then # if all timesteps are present, then concatenate
-    # echo "Processing $outroot with $file_count files…"
-    # output_file="${outroot}/trace.01-35.22000BP-1500CE.cam2.h0.${var}.0000101-258600.Sahul.decavg.concat.nc"
-    # # Concatenate in that exact order
-    # cdo -f nc4 -P 36 -O cat "${nc_files[@]}" "$output_file"
-    # else
-    # echo "Skipping $folder_name — found $file_count files, expected 36"
-    # fi
+    mapfile -t nc_files < <(ls -v1 "$outroot"/*.nc 2>/dev/null)
+    # Save the order to text for checking
+    printf '%s\n' "${nc_files[@]}" >"${outroot}/input_order.txt"
+    file_count=${#nc_files[@]}
+    if ((file_count == 2155)); then # if all timesteps are present, then concatenate
+        echo "Processing $outroot with $file_count files…"
+        output_file="${outroot}/trace.01-35.22000BP-1500CE.cam2.h0.${var}.0000101-258600.Sahul.decavg.concat.nc"
+        # Concatenate in that exact order
+        cdo -s -w -f nc4 -P 36 -O cat "${nc_files[@]}" "$output_file"
+    else
+        echo "Skipping $folder_name — found $file_count files, expected 36"
+    fi
 done
