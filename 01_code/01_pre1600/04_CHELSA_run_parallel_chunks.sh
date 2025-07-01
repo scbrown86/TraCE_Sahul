@@ -56,14 +56,14 @@ for ((t=1; t<=TOTAL_TIMESTEPS; t+=CHUNK_SIZE)); do
     for file in "${CLIM_FILES[@]}"; do
         infile="${CLIM_DIR}/${file}"
         outfile="${CLIM_OUT}/${file}"
-        cdo seltimestep,"${t}/${t_end}" "$infile" "$outfile"
+        cdo -w -L -s seltimestep,"${t}/${t_end}" "$infile" "$outfile"
     done
 
     # Subset oro files
     for file in "${ORO_FILES[@]}"; do
         infile="${ORO_DIR}/${file}"
         outfile="${ORO_OUT}/${file}"
-        cdo seltimestep,"${aux_step}" "$infile" "$outfile"
+        cdo -w -L -s seltimestep,"${aux_step}" "$infile" "$outfile"
     done
 
     export OUTPUT_DIR="$LOCAL_OUT/"
