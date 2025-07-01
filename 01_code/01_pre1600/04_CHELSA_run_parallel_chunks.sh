@@ -1,5 +1,7 @@
 #!/bin/bash
 
+cd /home/dafcluster4/Documents/GitHub/TraCE_Sahul
+
 # Input directories
 BASE_DIR="/media/dafcluster4/storage/TraCE_22k_1500CE"
 CLIM_DIR="${BASE_DIR}/clim"
