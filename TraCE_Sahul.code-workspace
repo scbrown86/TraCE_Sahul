@@ -2,7 +2,16 @@
 	"folders": [
 		{
 			"path": "."
+		},
+		{
+			"path": "../../../../../media/dafcluster4/storage"
+		},
+		{
+			"path": "../../../../../mnt/Data"
 		}
 	],
-	"settings": {}
+	"settings": {
+		"r.plot.defaults.colorTheme": "original",
+		"r.plot.useHttpgd": true
+	}
 }
