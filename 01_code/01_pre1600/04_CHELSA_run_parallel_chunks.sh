@@ -99,6 +99,8 @@ for ((t=1; t<=TOTAL_TIMESTEPS; t+=CHUNK_SIZE)); do
 
     # Clean up local output dir and scratch
     find "$LOCAL_OUT" -type f -name "*.nc" -delete
+    find "$CLIM_OUT" -type f -name "*.nc" -delete
+    find "$ORO_OUT" -type f -name "*.nc" -delete
     find "$SCRATCH_DIR" -type f  -delete
 
     # Logging
