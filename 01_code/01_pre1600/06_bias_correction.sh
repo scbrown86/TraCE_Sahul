@@ -39,7 +39,7 @@ for chunk_dir in "${input_base}"/[0-9][0-9][0-9][0-9][0-9]_[0-9][0-9][0-9][0-9][
         grid_desc=$(mktemp   --suffix ".txt")
         
         # Unpack to remove scale/offset
-        cdo -b F32 unpack "${concat_file}" "${tmp_unpacked}"
+        cdo -b -s -w F32 unpack "${concat_file}" "${tmp_unpacked}"
         
         # Choose remap method
         if [[ "${var}" == "pr" ]]; then
@@ -56,7 +56,7 @@ for chunk_dir in "${input_base}"/[0-9][0-9][0-9][0-9][0-9]_[0-9][0-9][0-9][0-9][
         # Apply bias correction
         if [[ "${var}" == "pr" ]]; then
             # needs a time axis to multiple by days per month!
-            cdo -b F32 \
+            cdo -s -w -b F32 \
                 -muldpm \
                 -setreftime,1600-01-16,,1month \
                 -settaxis,1600-01-16,,1month \
@@ -65,7 +65,7 @@ for chunk_dir in "${input_base}"/[0-9][0-9][0-9][0-9][0-9]_[0-9][0-9][0-9][0-9][
                 -mulc,86400 \
                 -mul "${tmp_unpacked}" "${tmp_delta}" "${tmp_biascorr}"
         else
-            cdo -b F32 \
+            cdo -s -w -b F32 \
                 -setreftime,1600-01-16,,1month \
                 -settaxis,1600-01-16,,1month \
                 -setcalendar,365_day \
@@ -87,4 +87,24 @@ for chunk_dir in "${input_base}"/[0-9][0-9][0-9][0-9][0-9]_[0-9][0-9][0-9][0-9][
 
     echo "Finished chunk ${chunk_name}"
     echo "----------------------------------------"
+done
+
+# concatentate the bias corrected files
+out_dir="/media/dafcluster4/storage/TraCE_22k_1500CE"
+for var in "${variables[@]}"; do
+	echo "processing variable: ${var}..."
+	
+	outfile="${out_dir}/TraCE_22k_1500CE_decadal_${var}_concat_biascorr.nc"
+	echo "outfile = ${outfile}"
+	
+	find "${input_base}"/*/out/"${var}" -type f -name '*biascorr.nc' > "${out_dir}/${var}_concat_input_order.txt"
+	
+	cdo -s -w -O --absolute_taxis pack -cat -unpack \
+		$(find "${input_base}"/*/out/"${var}" -type f -name '*biascorr.nc') \
+		"${outfile}"
+		
+	echo "resetting time dimension..."
+	ncap2 -O -s 'time=array(1,1,$time); time@units=""' "${outfile}" "${outfile}"
+	
+	echo "Done for variable: ${var}"
 done
