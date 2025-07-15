@@ -24,13 +24,17 @@ src_tas="/media/dafcluster4/storage/TraCE_22k_1500CE/TraCE_22k_1500CE_decadal_ta
 # Conservative weights for precipitation
 if [[ ! -f "$pr_weights" ]]; then
     echo "Making conservative weights for pr..."
+    export CDO_REMAP_NORM='destarea'
+    export REMAP_AREA_MIN=0.10
     cdo -P 100 gencon,"$targetgrid" "$src_pr" "$pr_weights"
 fi
 
 # Bilinear weights for temperatures (tas, tasmax, tasmin)
 if [[ ! -f "$tas_weights" ]]; then
     echo "Making bilinear weights for tas..."
-    cdo -P 100 genbil,"$targetgrid" "$src_tas" "$tas_weights"
+    export REMAP_AREA_MIN=0.10
+    export CDO_REMAP_NORM='fracarea'
+    cdo -P 100 gencon,"$targetgrid" "$src_tas" "$tas_weights"
 fi
 
 vars=(tas tasmax tasmin pr)
@@ -38,10 +42,14 @@ vars=(tas tasmax tasmin pr)
 for var in "${vars[@]}"; do
     # sums for precipitation, means otherwise
     if [[ $var == pr ]]; then
+        export CDO_REMAP_NORM='destarea'
+        export REMAP_AREA_MIN=0.10
         op_dec="timselsum,120"   # Centennial sums (120 months = 10 decades =  1 century). 2155 decades = 215.5 centuries, last "century" is only be 50 years.
         op_yr="yearmean"          # annual sums
         wgt="$pr_weights"
     else
+        export CDO_REMAP_NORM='fracarea'
+        export REMAP_AREA_MIN=0.10
         op_dec="timselmean,120"  # Centennial means
         op_yr="yearmean"         # annual means
         wgt="$tas_weights"
@@ -52,10 +60,10 @@ for var in "${vars[@]}"; do
     out_dec="${output_dir}/TraCE_22k_1500CE_centennial_${var}_biascorr_coarse.nc"
     out_dec2="${output_dir}/TraCE_22k_1500CE_centennial_${var}_biascorr_coarse_noSpat.nc"
     echo "Regridding and then temporally aggregating ${in_dec}"
-    # Need to divide the cenntennial sum by 100 to get mm/year average. Do later for plotting as last time step needs to be div by 50
+    # Need to divide the centennial sum by 100 to get mm/year average. Do later for plotting as last time step needs to be div by 50
     cdo -s -b F32 -P 100 "$op_dec" -remap,"$targetgrid","$wgt" "$in_dec" "$out_dec"
-    echo "Temporally aggregating ${in_dec}"
-    cdo -b F32 -P 100 "$op_dec" "$in_dec" "$out_dec2"
+    # echo "Temporally aggregating ${in_dec}"
+    # cdo -b F32 -P 100 "$op_dec" "$in_dec" "$out_dec2"
 
     # TraCE_1500_1990CE annual steps
     in_yr="/media/dafcluster4/storage/TraCE_1500_1990CE/CHELSA_${var}_1500_1990_biascorr.nc"
@@ -63,6 +71,6 @@ for var in "${vars[@]}"; do
     out_yr2="${output_dir}/TraCE_1500_1990CE_annual_${var}_biascorr_coarse_noSpat.nc"
     echo "Regridding and then temporally aggregating ${in_yr}"
     cdo -s -b F32 -P 100 "$op_yr" -remap,"$targetgrid","$wgt" "$in_dec" "$out_dec"
-    echo "Temporally aggregating ${in_yr}"
-    cdo -b F32 -P 100 "$op_yr" "$in_yr" "$out_yr2"
+    # echo "Temporally aggregating ${in_yr}"
+    # cdo -b F32 -P 100 "$op_yr" "$in_yr" "$out_yr2"
 done
