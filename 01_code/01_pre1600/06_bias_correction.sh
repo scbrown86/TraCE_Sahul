@@ -24,7 +24,7 @@ for chunk_dir in "${input_base}"/[0-9][0-9][0-9][0-9][0-9]_[0-9][0-9][0-9][0-9][
         biascorr_file="${var_dir}/CHELSA_${var}_${chunk_name}_concat_biascorr.nc"
         # concatenate chunk
         echo "  Concatenating ${var} in ${chunk_name}"
-        cdo -O cat $(ls -v1 "${var_dir}"/*.nc) "${concat_file}"
+        cdo -b F32 -P 100 -O unpack -cat $(ls -v1 "${var_dir}"/*.nc) "${concat_file}"
         # grab corresponding delta file
         delta_file=$(find "${delta_base}" -type f -name "delta_fine_delta_${var}_climatology_ncdf4.nc" | head -n 1)
         if [[ ! -f "${delta_file}" ]]; then
@@ -39,47 +39,47 @@ for chunk_dir in "${input_base}"/[0-9][0-9][0-9][0-9][0-9]_[0-9][0-9][0-9][0-9][
         grid_desc=$(mktemp   --suffix ".txt")
         
         # Unpack to remove scale/offset
-        cdo -b -s -w F32 unpack "${concat_file}" "${tmp_unpacked}"
+        cdo -P 100 -b F32 unpack "${concat_file}" "${tmp_unpacked}"
         
         # Choose remap method
         if [[ "${var}" == "pr" ]]; then
-            remap_method="remapcon"
+            remap_method="-remapcon"
         else
-            remap_method="remapbil"
+            remap_method="-remapnn"
         fi
         
         # remap delta to ensure that grids align
         # Could probably use remapnn as there should be no actual regridding?
-        cdo griddes "${concat_file}" > "${grid_desc}"
-        cdo -P 64 -s -w "${remap_method},${grid_desc}" "${delta_file}" "${tmp_delta}"
+        cdo griddes "${tmp_unpacked}" > "${grid_desc}"
+        cdo -s -w -P 100 unpack "${remap_method},${grid_desc}" "${delta_file}" "${tmp_delta}"
 
         # Apply bias correction
         if [[ "${var}" == "pr" ]]; then
-            # needs a time axis to multiple by days per month!
-            cdo -s -w -b F32 \
+            # needs a time axis to multiply by days per month
+            cdo -P 100 -b F32 \
+                setunit,'mm/month' \
                 -muldpm \
-                -setreftime,1600-01-16,,1month \
-                -settaxis,1600-01-16,,1month \
+                -setreftime,2000-01-16,,1month \
+                -settaxis,2000-01-16,,1month \
                 -setcalendar,365_day \
-                -setunit,'mm/month' \
                 -mulc,86400 \
                 -mul "${tmp_unpacked}" "${tmp_delta}" "${tmp_biascorr}"
         else
-            cdo -s -w -b F32 \
-                -setreftime,1600-01-16,,1month \
-                -settaxis,1600-01-16,,1month \
+            cdo -P 100 -b F32 \
+                -setreftime,2000-01-16,,1month \
+                -settaxis,2000-01-16,,1month \
                 -setcalendar,365_day \
                 -setunit,'deg_C' \
                 -subc,273.15 \
                 -add "${tmp_unpacked}" "${tmp_delta}" "${tmp_biascorr}"
         fi
 
-        # Pack final output
+        # Don't store with compressed data
         echo "  Writing bias‑corrected file: ${biascorr_file}"
-        cdo pack "${tmp_biascorr}" "${biascorr_file}"
+        cdo -b F32 unpack "${tmp_biascorr}" "${biascorr_file}"
 
         # Clean up temporary files
-        find "${var_dir}" -type f -name "$(basename "${concat_file}")" -delete
+        # find "${var_dir}" -type f -name "$(basename "${concat_file}")" -delete
         rm -f "${tmp_unpacked}" "${tmp_delta}" "${tmp_biascorr}" "${grid_desc}"
 
         echo "  Finished ${var} for chunk ${chunk_name}"
@@ -99,7 +99,7 @@ for var in "${variables[@]}"; do
 	
 	find "${input_base}"/*/out/"${var}" -type f -name '*biascorr.nc' > "${out_dir}/${var}_concat_input_order.txt"
 	
-	cdo -s -w -O --absolute_taxis pack -cat -unpack \
+	cdo -O --absolute_taxis pack -cat -unpack \
 		$(find "${input_base}"/*/out/"${var}" -type f -name '*biascorr.nc') \
 		"${outfile}"
 		

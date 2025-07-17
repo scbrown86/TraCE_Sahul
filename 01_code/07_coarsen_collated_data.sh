@@ -44,7 +44,7 @@ for var in "${vars[@]}"; do
     if [[ $var == pr ]]; then
         export CDO_REMAP_NORM='destarea'
         export REMAP_AREA_MIN=0.10
-        op_dec="timselsum,120"   # Centennial sums (120 months = 10 decades =  1 century). 2155 decades = 215.5 centuries, last "century" is only be 50 years.
+        op_dec="timselsum,120"   # Centennial sums (120 months = 10 decades =  1 century). 2155 decades = 215.5 centuries, last "century" is only 50 years.
         op_yr="yearmean"          # annual sums
         wgt="$pr_weights"
     else
@@ -58,7 +58,7 @@ for var in "${vars[@]}"; do
     # TraCE_22k_1500CE decadal steps
     in_dec="/media/dafcluster4/storage/TraCE_22k_1500CE/TraCE_22k_1500CE_decadal_${var}_concat_biascorr.nc"
     out_dec="${output_dir}/TraCE_22k_1500CE_centennial_${var}_biascorr_coarse.nc"
-    out_dec2="${output_dir}/TraCE_22k_1500CE_centennial_${var}_biascorr_coarse_noSpat.nc"
+    # out_dec2="${output_dir}/TraCE_22k_1500CE_centennial_${var}_biascorr_coarse_noSpat.nc"
     echo "Regridding and then temporally aggregating ${in_dec}"
     # Need to divide the centennial sum by 100 to get mm/year average. Do later for plotting as last time step needs to be div by 50
     cdo -s -b F32 -P 100 "$op_dec" -remap,"$targetgrid","$wgt" "$in_dec" "$out_dec"
@@ -68,9 +68,9 @@ for var in "${vars[@]}"; do
     # TraCE_1500_1990CE annual steps
     in_yr="/media/dafcluster4/storage/TraCE_1500_1990CE/CHELSA_${var}_1500_1990_biascorr.nc"
     out_yr="${output_dir}/TraCE_1500_1990CE_annual_${var}_biascorr_coarse.nc"
-    out_yr2="${output_dir}/TraCE_1500_1990CE_annual_${var}_biascorr_coarse_noSpat.nc"
+    # out_yr2="${output_dir}/TraCE_1500_1990CE_annual_${var}_biascorr_coarse_noSpat.nc"
     echo "Regridding and then temporally aggregating ${in_yr}"
-    cdo -s -b F32 -P 100 "$op_yr" -remap,"$targetgrid","$wgt" "$in_dec" "$out_dec"
+    cdo -s -b F32 -P 100 "$op_yr" -remap,"$targetgrid","$wgt" "$in_yr" "$out_yr"
     # echo "Temporally aggregating ${in_yr}"
     # cdo -b F32 -P 100 "$op_yr" "$in_yr" "$out_yr2"
 done

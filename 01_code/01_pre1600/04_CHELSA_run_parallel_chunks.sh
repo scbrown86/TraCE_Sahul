@@ -1,5 +1,8 @@
 #!/bin/bash
+# deactivate any conda environment
+conda deactivate || true
 
+# CD
 cd /home/dafcluster4/Documents/GitHub/TraCE_Sahul
 
 # Input directories
@@ -58,15 +61,39 @@ for ((t=1; t<=TOTAL_TIMESTEPS; t+=CHUNK_SIZE)); do
     for file in "${CLIM_FILES[@]}"; do
         infile="${CLIM_DIR}/${file}"
         outfile="${CLIM_OUT}/${file}"
-        cdo -w -L -s seltimestep,"${t}/${t_end}" "$infile" "$outfile"
+        cdo -L -w -s seltimestep,"${t}/${t_end}" "$infile" "$outfile"
     done
 
     # Subset oro files
     for file in "${ORO_FILES[@]}"; do
         infile="${ORO_DIR}/${file}"
         outfile="${ORO_OUT}/${file}"
-        cdo -w -L -s seltimestep,"${aux_step}" "$infile" "$outfile"
+        cdo -L -w -s seltimestep,"${aux_step}" "$infile" "$outfile"
     done
+
+    # need to remap the oro_high to the coarse resolution
+    ## "Clean" the netcdf files
+    gdal_translate "${ORO_OUT}/oro_high.nc" "${ORO_OUT}/oro_high.tif" > /dev/null 2>&1
+    gdal_translate "${ORO_OUT}/oro_high.tif" "${ORO_OUT}/oro_high.nc" > /dev/null 2>&1
+    gdal_translate "${ORO_OUT}/oro.nc" "${ORO_OUT}/oro.tif" > /dev/null 2>&1
+    gdal_translate "${ORO_OUT}/oro.tif" "${ORO_OUT}/oro.nc" > /dev/null 2>&1
+    
+    # regridding high res to coarse res
+    ncpdq -O -U "${ORO_OUT}/oro_high.nc" "${ORO_OUT}/oro_high.nc" # need to "unpack" data before regridding
+    ncremap -a nco_con -t 100 -d "${ORO_OUT}/oro.nc" "${ORO_OUT}/oro_high.nc" "${ORO_OUT}/oro_remap.nc"
+    cdo -s -w -L -b F32 -selgrid,2 "${ORO_OUT}/oro_remap.nc" "${ORO_OUT}/oro_remap2.nc"
+    cdo -s -w -L -b F32 setmisstoc,0 -remapnn,"${ORO_OUT}/oro_remap2.nc" "${ORO_OUT}/oro_remap2.nc" "${ORO_OUT}/oro_remap.nc"
+    rm -f "${ORO_OUT}/oro_remap2.nc"
+    
+    # ensure orographic and bathymetric coverage at coarse resolution
+    cdo -O -b F32 -s -w -L ifthenelse "${ORO_OUT}/oro_remap.nc" "${ORO_OUT}/oro_remap.nc" "${ORO_OUT}/oro.nc" "${ORO_OUT}/oro_remap2.nc" 
+    cdo -s -w -L copy "${ORO_OUT}/oro_remap2.nc" "${ORO_OUT}/oro.nc"
+    rm -f "${ORO_OUT}/oro_remap.nc" "${ORO_OUT}/oro_remap2.nc" "${ORO_OUT}/oro_high.tif" "${ORO_OUT}/oro.tif"
+    
+    # "Clean" final version
+    gdal_translate "${ORO_OUT}/oro.nc" "${ORO_OUT}/oro.tif" > /dev/null 2>&1
+    gdal_translate "${ORO_OUT}/oro.tif" "${ORO_OUT}/oro.nc" > /dev/null 2>&1
+    rm -f "${ORO_OUT}/oro.tif"
 
     export OUTPUT_DIR="$LOCAL_OUT/"
     export START=1
@@ -114,3 +141,7 @@ for ((t=1; t<=TOTAL_TIMESTEPS; t+=CHUNK_SIZE)); do
     echo "$LOG_LINE"
     echo "$LOG_LINE" >> "$LOG_FILE"
 done
+
+# Clear or create the log file
+echo "Processing finished: $(date)" > "$LOG_FILE"
+echo "------------------------------------------" >> "$LOG_FILE"
