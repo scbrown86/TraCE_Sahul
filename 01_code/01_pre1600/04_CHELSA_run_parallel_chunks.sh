@@ -61,14 +61,14 @@ for ((t=1; t<=TOTAL_TIMESTEPS; t+=CHUNK_SIZE)); do
     for file in "${CLIM_FILES[@]}"; do
         infile="${CLIM_DIR}/${file}"
         outfile="${CLIM_OUT}/${file}"
-        cdo -L -w -s seltimestep,"${t}/${t_end}" "$infile" "$outfile"
+        cdo -L -w -s seltimestep,"${t}/${t_end}" "$infile" "$outfile" > /dev/null 2>&1
     done
 
     # Subset oro files
     for file in "${ORO_FILES[@]}"; do
         infile="${ORO_DIR}/${file}"
         outfile="${ORO_OUT}/${file}"
-        cdo -L -w -s seltimestep,"${aux_step}" "$infile" "$outfile"
+        cdo -L -w -s seltimestep,"${aux_step}" "$infile" "$outfile" > /dev/null 2>&1
     done
 
     # need to remap the oro_high to the coarse resolution
@@ -79,8 +79,8 @@ for ((t=1; t<=TOTAL_TIMESTEPS; t+=CHUNK_SIZE)); do
     gdal_translate "${ORO_OUT}/oro.tif" "${ORO_OUT}/oro.nc" > /dev/null 2>&1
     
     # regridding high res to coarse res
-    ncpdq -O -U "${ORO_OUT}/oro_high.nc" "${ORO_OUT}/oro_high.nc" # need to "unpack" data before regridding
-    ncremap -a nco_con -t 100 -d "${ORO_OUT}/oro.nc" "${ORO_OUT}/oro_high.nc" "${ORO_OUT}/oro_remap.nc"
+    ncpdq -D 0 -O -U "${ORO_OUT}/oro_high.nc" "${ORO_OUT}/oro_high.nc" # need to "unpack" data before regridding
+    ncremap -D 0 -a nco_con -t 100 -d "${ORO_OUT}/oro.nc" "${ORO_OUT}/oro_high.nc" "${ORO_OUT}/oro_remap.nc" > /dev/null 2>&1
     cdo -s -w -L -b F32 -selgrid,2 "${ORO_OUT}/oro_remap.nc" "${ORO_OUT}/oro_remap2.nc"
     cdo -s -w -L -b F32 setmisstoc,0 -remapnn,"${ORO_OUT}/oro_remap2.nc" "${ORO_OUT}/oro_remap2.nc" "${ORO_OUT}/oro_remap.nc"
     rm -f "${ORO_OUT}/oro_remap2.nc"
