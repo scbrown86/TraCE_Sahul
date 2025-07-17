@@ -1,4 +1,8 @@
 #!/bin/bash
+
+# Source Conda setup
+# source ~/miniconda3/etc/profile.d/conda.sh
+
 # deactivate any conda environment
 conda deactivate || true
 
@@ -102,9 +106,9 @@ for ((t=1; t<=TOTAL_TIMESTEPS; t+=CHUNK_SIZE)); do
     conda deactivate || true
     conda activate CHELSA_paleo
 
-    echo $INPUT_DIR
-    echo $OUTPUT_DIR
-    echo $SCRATCH_DIR
+    # echo $INPUT_DIR
+    # echo $OUTPUT_DIR
+    # echo $SCRATCH_DIR
 
     # singularity exec $SINGULARITY_IMG python $SCRIPT -t 1 -i "$INPUT_DIR" -o "$OUTPUT_DIR" -tmp "$SCRATCH_DIR"
 
@@ -140,6 +144,32 @@ for ((t=1; t<=TOTAL_TIMESTEPS; t+=CHUNK_SIZE)); do
     
     echo "$LOG_LINE"
     echo "$LOG_LINE" >> "$LOG_FILE"
+
+    # Estimate remaining time
+    COMPLETED_STEPS=$((aux_step))
+    REMAINING_STEPS=$((TOTAL_TIMESTEPS / CHUNK_SIZE - COMPLETED_STEPS))
+    AVG_TIME_PER_CHUNK=$((ELAPSED / 1))
+
+    # Optional: running average - store and average past chunk times
+    if [ $COMPLETED_STEPS -eq 1 ]; then
+        TOTAL_ELAPSED=$ELAPSED
+    else
+        TOTAL_ELAPSED=$((TOTAL_ELAPSED + ELAPSED))
+        AVG_TIME_PER_CHUNK=$((TOTAL_ELAPSED / COMPLETED_STEPS))
+    fi
+
+    REMAINING_SECONDS=$((AVG_TIME_PER_CHUNK * REMAINING_STEPS))
+
+    PROGRESS_PERCENT=$(printf "%.2f" "$(echo "$COMPLETED_STEPS * 100 / ($TOTAL_TIMESTEPS / $CHUNK_SIZE)" | bc -l)")
+    ETA_LINE=$(printf "Estimated remaining time: %d days %02d hours %02d min %02d sec\n" \
+        $((REMAINING_SECONDS / 86400)) \
+        $((REMAINING_SECONDS % 86400 / 3600)) \
+        $((REMAINING_SECONDS % 3600 / 60)) \
+        $((REMAINING_SECONDS % 60)))
+
+    echo "$ETA_LINE"
+    echo "Progress: $PROGRESS_PERCENT% complete\n"
+
 done
 
 # Clear or create the log file
