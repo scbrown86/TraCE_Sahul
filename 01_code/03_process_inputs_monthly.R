@@ -50,7 +50,7 @@ setwd("/home/dafcluster4/Documents/GitHub/TraCE_Sahul")
 # Proj4 string = '+proj=merc +lon_0=0 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs'
 
 # create relative humidity data
-huss <- rast("02_data/01_inputs/trace.36.400BP-1990CE.cam2.h0.RELHUM.2160101-2204012.Sahul.1600_1989CE.nc", "RELHUM")
+huss <- rast("/media/dafcluster4/storage/TraCE_Monthly/RELHUM/trace.01-36.22000BP-1990CE.cam2.h0.RELHUM.0000101-2204012.Sahul.concat.1500_1989CE.nc", "RELHUM")
 time(huss) <- rev(seq(as.Date("1989-12-16"), by = "-1 months", l = nlyr(huss)))
 units(huss) <- "percent"
 varnames(huss) <- "RELHUM (Relative humidity)"
@@ -62,8 +62,7 @@ writeCDF(huss, "02_data/02_processed/huss.nc",
      varname = "relhum",
      longname = "RELHUM (Relative humidity)",
      overwrite = TRUE,
-     unit = "percent", zname = "time", prec = "float"
-)
+     unit = "percent", zname = "time", prec = "float")
 
 # create precipitation data
 pr <- rast("02_data/01_inputs/trace.36.400BP-1990CE.cam2.h0.PRECC.2160101-2204012.Sahul.1600_1989CE.nc", "PRECC") +

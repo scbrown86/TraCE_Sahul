@@ -17,6 +17,7 @@ output_root="/mnt/Data/TraCE21_Sahul/"
 mkdir -p "$output_root"
 map_location="/home/dafcluster4/Documents/GitHub/TraCE_Sahul/02_data/trace_to_sahul_coarse_bilin.nc"
 
+# remap and process all the global monthly trace data to Sahul
 for file in ./*/*.nc; do
     echo "$file"
     var=$(echo "$file" | cut -f 7 -d ".")

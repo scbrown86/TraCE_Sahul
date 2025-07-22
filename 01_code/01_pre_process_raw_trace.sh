@@ -2,65 +2,63 @@
 
 conda activate nco_stable
 
-cd /home/dafcluster4/Desktop/TraCE_Data/
+# Define paths
+base_dir="/mnt/Data/TraCE21_Sahul"
+output_dir="/media/dafcluster4/storage/TraCE_Monthly"
 
-ncremap -g ~/Documents/GitHub/TraCE_Sahul/02_data/sahul_coarse.nc -G latlon=17,15#snwe=-52.5,11.25,105.0,161.25 #3.75 grid
+cd "$base_dir" || exit 1
 
-# generate a map file to place raw trace-data on 3.75x3.75 grid
-ncremap -a bilinear -V Z3 --preserve=mean -R '--rgn_dst --rnr_thr=0.0' -g ~/Documents/GitHub/TraCE_Sahul/02_data/sahul_coarse.nc -s ./raw/monthly/others/trace.36.400BP-1990CE.cam2.h0.Z3.2160101-2204012.nc -m ~/Documents/GitHub/TraCE_Sahul/02_data/trace_to_sahul_coarse_bilin.nc -o ~/Documents/GitHub/TraCE_Sahul/02_data/temp_output.nc
-
-# remap TraCE21 data to 0.5 degree grid
-output_dir="/home/dafcluster4/Documents/GitHub/TraCE_Sahul/02_data/01_inputs/"
-map_location="/home/dafcluster4/Documents/GitHub/TraCE_Sahul/02_data/trace_to_sahul_coarse_bilin.nc"
-
-for file in ./raw/monthly/*/*.nc; do
-    echo "$file"
-    # Get variable from filename
-    var=$(echo "$file" | cut -f 7 -d ".")
-    echo -e "$var"
-    # Remap with ncremap
-    oname="$(basename "$file" .nc)"
-    outname="${output_dir}${oname}.Sahul.nc"
-    ncremap -v "$var" -m "$map_location" -i "$file" -o "$outname"
-    infile="$outname"
-    # Prepare output filename for processed file
-    unset oname outname
+# Loop over each subdirectory
+for folder in */ ; do
+    var="${folder%/}"  # Remove trailing slash to get the variable name
+    if [[ "$var" == "LANDFRAC" ]]; then
+        continue
+    fi
+    echo "$var"
+    # make the output dir
+    mkdir -p "$output_dir/$var"
+    # Construct expected file path
+    infile="${base_dir}/${var}/trace.01-36.22000BP-1990CE.cam2.h0.${var}.0000101-2204012.Sahul.concat.nc"
+    # Check if file exists
+    if [[ ! -f "$infile" ]]; then
+        echo "File not found for variable $var: $infile"
+        continue
+    fi
+    echo "Processing $infile"
+    # Create output filename
     oname="$(basename "$infile" .nc)"
-    outname="${output_dir}${oname}.1600_1989CE.nc"
-    # Process based on variable name
+    outname="${output_dir}/${var}/${oname}.1500_1989CE.nc"
+    # Run CDO processing based on variable
+    # the inputs have already been remapped, cropped to Sahul, and adjusted as needed
+    # just need to grab the appropriate timesteps and reset the calendar
     if [[ "$var" == "T" || "$var" == "Z3" ]]; then
-        cdo -setreftime,1600-01-16,,1month \
-            -settaxis,1600-01-16,,1month \
+        cdo -L -setreftime,1500-01-16,,1month \
+            -settaxis,1500-01-16,,1month \
             -setcalendar,365_day \
-            -seltimestep,601/5280 \
-            -sellevidx,20,26 \
+            -seltimestep,258601/264480 \
             "$infile" "$outname"
     elif [[ "$var" == "RELHUM" || "$var" == "U" || "$var" == "V" ]]; then
-        cdo --reduce_dim \
-            -setreftime,1600-01-16,,1month \
-            -settaxis,1600-01-16,,1month \
+        cdo -L --reduce_dim \
+            -setreftime,1500-01-16,,1month \
+            -settaxis,1500-01-16,,1month \
             -setcalendar,365_day \
-            -seltimestep,601/5280 \
-            -sellevidx,26 \
+            -seltimestep,258601/264480 \
             "$infile" "$outname"
     elif [[ "$var" == "PRECC" || "$var" == "PRECL" ]]; then
-        cdo chunit,'m/s','kg/m2/s' \
-            -mulc,1000 \
-            -setreftime,1600-01-16,,1month \
-            -settaxis,1600-01-16,,1month \
+        cdo -L -setreftime,1500-01-16,,1month \
+            -settaxis,1500-01-16,,1month \
             -setcalendar,365_day \
-            -seltimestep,601/5280 \
+            -seltimestep,258601/264480 \
             "$infile" "$outname"
     else
-        cdo -setreftime,1600-01-16,,1month \
-            -settaxis,1600-01-16,,1month \
+        cdo -L -setreftime,1500-01-16,,1month \
+            -settaxis,1500-01-16,,1month \
             -setcalendar,365_day \
-            -seltimestep,601/5280 \
+            -seltimestep,258601/264480 \
             "$infile" "$outname"
     fi
-    unset mapfile oname outname
+    echo "Output written: $outname"
 done
 
 cd "$output_dir"
 
-rm -rf *.Sahul.nc
