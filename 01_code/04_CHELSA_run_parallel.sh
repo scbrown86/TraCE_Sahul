@@ -1,10 +1,8 @@
 #!/bin/bash
 conda deactivate
-conda activate CHELSA_paleo
 
-END=4680
+END=5880
 START=1
-START_TIME=$(date +%s)
 
 export SINGULARITY_IMG="/home/dafcluster4/chelsa_paleo/singularity/chelsa_paleo.sif"
 export SCRIPT="/home/dafcluster4/chelsa_paleo/src/chelsa.py"
@@ -12,7 +10,48 @@ export INPUT_DIR="/home/dafcluster4/Documents/GitHub/TraCE_Sahul/02_data/03_CHEL
 export OUTPUT_DIR="/home/dafcluster4/Documents/GitHub/TraCE_Sahul/02_data/03_CHELSA_paleo/out/"
 export SCRATCH_DIR="/home/dafcluster4/scratch"
 
+conda activate nco_stable
+
+# need to ensure the coarse elevation is the same as used in the paleo runs
+cp "/media/dafcluster4/storage/TraCE_22k_1500CE/static/merc_template.nc" "${INPUT_DIR}/static/merc_template.nc" # static template
+in_high_oro="/media/dafcluster4/storage/TraCE_22k_1500CE/orog/oro_high.nc"
+out_high_oro="/home/dafcluster4/Documents/GitHub/TraCE_Sahul/02_data/03_CHELSA_paleo/orog/oro_high.nc"
+in_oro="/media/dafcluster4/storage/TraCE_22k_1500CE/orog/oro.nc"
+out_oro="/home/dafcluster4/Documents/GitHub/TraCE_Sahul/02_data/03_CHELSA_paleo/orog/oro.nc"
+cdo -L -w -s seltimestep,2155 "$in_high_oro" "$out_high_oro"
+cdo -L -w -s seltimestep,2155 "$in_oro" "$out_oro"
+# need to remap the oro_high to the coarse resolution
+## "Clean" the netcdf files
+gdal_translate "${INPUT_DIR}/orog/oro_high.nc" "${INPUT_DIR}/orog/oro_high.tif" > /dev/null 2>&1
+gdal_translate "${INPUT_DIR}/orog/oro_high.tif" "${INPUT_DIR}/orog/oro_high.nc" > /dev/null 2>&1
+gdal_translate "${INPUT_DIR}/orog/oro.nc" "${INPUT_DIR}/orog/oro.tif" > /dev/null 2>&1
+gdal_translate "${INPUT_DIR}/orog/oro.tif" "${INPUT_DIR}/orog/oro.nc" > /dev/null 2>&1
+    
+# regridding high res to coarse res
+ncpdq -D 0 -O -U "${INPUT_DIR}/orog/oro_high.nc" "${INPUT_DIR}/orog/oro_high.nc" # need to "unpack" data before regridding
+# ncatted -O -a _FillValue,elevation,m,f,1.0e36 "${INPUT_DIR}/orog/oro_high.nc" "${INPUT_DIR}/orog/oro_high.nc"
+# ncatted -O -a _FillValue,elevation,m,f,1.0e36 "${INPUT_DIR}/orog/oro.nc" "${INPUT_DIR}/orog/oro.nc"
+ncremap -D 0 -a nco_con -t 100 -d "${INPUT_DIR}/orog/oro.nc" "${INPUT_DIR}/orog/oro_high.nc" "${INPUT_DIR}/orog/oro_remap.nc" > /dev/null 2>&1
+cdo -s -w -L -b F32 -selgrid,2 "${INPUT_DIR}/orog/oro_remap.nc" "${INPUT_DIR}/orog/oro_remap2.nc"
+cdo -s -w -L -b F32 setmisstoc,0 -remapnn,"${INPUT_DIR}/orog/oro_remap2.nc" "${INPUT_DIR}/orog/oro_remap2.nc" "${INPUT_DIR}/orog/oro_remap.nc"
+rm -f "${INPUT_DIR}/orog/oro_remap2.nc"
+    
+# ensure orographic and bathymetric coverage at coarse resolution
+cdo -O -b F32 -s -w -L ifthenelse "${INPUT_DIR}/orog/oro_remap.nc" "${INPUT_DIR}/orog/oro_remap.nc" "${INPUT_DIR}/orog/oro.nc" "${INPUT_DIR}/orog/oro_remap2.nc" 
+cdo -s -w -L copy "${INPUT_DIR}/orog/oro_remap2.nc" "${INPUT_DIR}/orog/oro.nc"
+rm -f "${INPUT_DIR}/orog/oro_remap.nc" "${INPUT_DIR}/orog/oro_remap2.nc" "${INPUT_DIR}/orog/oro_high.tif" "${INPUT_DIR}/orog/oro.tif"
+    
+# "Clean" final version
+gdal_translate "${INPUT_DIR}/orog/oro.nc" "${INPUT_DIR}/orog/oro.tif" > /dev/null 2>&1
+gdal_translate "${INPUT_DIR}/orog/oro.tif" "${INPUT_DIR}/orog/oro.nc" > /dev/null 2>&1
+rm -f "${INPUT_DIR}/orog/oro.tif"
+
+conda deactivate
+conda activate CHELSA_paleo
+
 # singularity exec $SINGULARITY_IMG python $SCRIPT -t 1 -i $INPUT_DIR -o $OUTPUT_DIR -tmp $SCRATCH_DIR
+
+START_TIME=$(date +%s)
 
 seq $END -1 $START | parallel --bar -j 12 -k ' # will start at 12/1989 and work backwards
     TMP_PREFIX=$(printf "%04d" {}) &&
