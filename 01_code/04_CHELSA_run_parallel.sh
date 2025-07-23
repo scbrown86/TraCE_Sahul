@@ -13,6 +13,7 @@ export SCRATCH_DIR="/home/dafcluster4/scratch"
 conda activate nco_stable
 
 # need to ensure the coarse elevation is the same as used in the paleo runs
+## final timestep (~1500) to 1990 is constant orography so can use final timestep
 cp "/media/dafcluster4/storage/TraCE_22k_1500CE/static/merc_template.nc" "${INPUT_DIR}/static/merc_template.nc" # static template
 in_high_oro="/media/dafcluster4/storage/TraCE_22k_1500CE/orog/oro_high.nc"
 out_high_oro="/home/dafcluster4/Documents/GitHub/TraCE_Sahul/02_data/03_CHELSA_paleo/orog/oro_high.nc"
@@ -53,7 +54,7 @@ conda activate CHELSA_paleo
 
 START_TIME=$(date +%s)
 
-seq $END -1 $START | parallel --bar -j 12 -k ' # will start at 12/1989 and work backwards
+seq $END -1 $START | parallel --bar -j 6 -k ' # will start at 12/1989 and work backwards
     TMP_PREFIX=$(printf "%04d" {}) &&
     TMP_DIR="$SCRATCH_DIR/tmp_$TMP_PREFIX/" &&
     mkdir -p "$TMP_DIR" &&
