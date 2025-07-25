@@ -121,7 +121,7 @@ coarse_chelsa_clim <- lapply(fine_clim, interpolate_bspline,
   parallel_cores = 12,
   start_date = as.Date("1985-01-16"),
   outname_template = "CHELSA_coarse_%s_climatology.nc",
-  load_exist = FALSE)
+  load_exist = TRUE)
 names(coarse_chelsa_clim) <- c("pr", "tas", "tasmin", "tasmax")
 coarse_chelsa_clim
 
@@ -129,10 +129,9 @@ coarse_chelsa_clim
 
 #### TRACE ####
 # load in the downscaled Brown data
-brown <- list.files("02_data/03_CHELSA_paleo/out",
-  recursive = TRUE, pattern = "1600_1990.nc$",
-  full.names = TRUE
-)
+brown <- list.files("/media/dafcluster4/storage/TraCE_1500_1990CE/1500_1990/out",
+  recursive = TRUE, pattern = "1980_1990",
+  full.names = TRUE)
 
 brown_climatologies <- c(
   "02_data/02_processed/TRACE/TraCE_coarse_pr_climatology.nc",

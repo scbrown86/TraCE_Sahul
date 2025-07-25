@@ -156,11 +156,12 @@ interpolate_bspline <- function(x, output_dir,
     }
   nc_outfile <- file.path(output_dir, sprintf(outname_template, nc_varname))
   if (file.exists(nc_outfile) && load_exist) {
+    message("Loading existing netcdf...")
     return(rast(nc_outfile))
   }
   out_files <- file.path(output_dir, sprintf("%s_bspline_%02d.tif", out_prefix, 1:12))
   if (all(sapply(out_files, file.exists)) && load_exist) {
-    message("Loading b-spline files...")
+    message("Loading b-spline tif files...")
     out_stack <- rast(lapply(out_files, rast))
   } else {
     message("Interpolating b-splines...")
@@ -177,7 +178,7 @@ interpolate_bspline <- function(x, output_dir,
         ingrid <- ifel(ingrid < 5, 5, ingrid)
       }
       bspline <- safe_spline(
-        "sagang:multilevelbsplinefromgridpoints",
+        "sagang:multilevelbsplinefromrasterpoints",
         GRID = ingrid,
         "TARGET_USER_XMIN TARGET_USER_XMAX TARGET_USER_YMIN TARGET_USER_YMAX" = bspline_ext,
         TARGET_USER_SIZE = target_size,
