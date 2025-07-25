@@ -106,7 +106,11 @@ interpolate_bspline <- function(x, output_dir,
   if (nlyr(x) != 12) stop("The raster must have 12 monthly layers.")
   if (!delta && is.null(units(x))) stop("Raster must have units set using `units(x)` if delta = FALSE.")
   var_name <- varnames(x)
-  var_unit <- if (!delta) unique(units(x)) else NULL
+  var_unit <- if (!delta) {
+    unique(units(x))
+  } else {
+    NULL
+  }
   is_precip <- !delta && (var_unit == "kg/m2/s" || var_name %in% c("pr", "precip"))
   is_temp   <- !delta && (var_unit %in% c("degC", "deg_C") || var_name %in% c("tas", "tasmin", "tasmax"))
   if (!delta && !is_precip && !is_temp) {
@@ -120,11 +124,21 @@ interpolate_bspline <- function(x, output_dir,
                         "tasmin" = "tmn",
                         "tasmax" = "tmx",
                         var_name)
-  out_prefix <- if (delta) paste0("delta_", base_prefix) else base_prefix
-  nc_varname <- if (delta) paste0("delta_", var_name) else switch(
-    var_name, "precip" = "pr", "tas" = "tas", "tasmin" = "tasmin", "tasmax" = "tasmax", var_name
-  )
-  nc_longname <- if (delta) paste("delta of", var_name) else switch(
+  out_prefix <- if (delta) {
+    paste0("delta_", base_prefix)
+  } else {
+      base_prefix
+  }
+  nc_varname <- if (delta) {
+    paste0("delta_", var_name)
+  } else {
+      switch(
+      var_name, "precip" = "pr", "tas" = "tas", "tasmin" = "tasmin", "tasmax" = "tasmax", var_name)
+  }
+  nc_longname <- if (delta) {
+    paste("delta of", var_name)
+  } else {
+    switch(
     var_name,
     "pr" = "precipitation",
     "precip" = "precipitation",
@@ -132,8 +146,14 @@ interpolate_bspline <- function(x, output_dir,
     "tasmin" = "minimum temperature at surface",
     "tasmax" = "maximum temperature at surface",
     nc_varname
-  )
-  nc_unit <- if (delta) "" else if (is_precip) "kg/m2/s" else "deg_C"
+  )}
+  nc_unit <- if (delta) {
+    ""
+    } else if (is_precip) {
+      "kg/m2/s"
+    } else {
+      "deg_C"
+    }
   nc_outfile <- file.path(output_dir, sprintf(outname_template, nc_varname))
   if (file.exists(nc_outfile) && load_exist) {
     return(rast(nc_outfile))
@@ -146,7 +166,7 @@ interpolate_bspline <- function(x, output_dir,
     message("Interpolating b-splines...")
     interpolated <- pblapply(seq_len(12), function(i) {
       out_file <- out_files[i]
-      if (file.exists(out_file)) {
+      if (file.exists(out_file) && load_exist) {
         return(wrap(rast(out_file)))
       }
       tmp_r <- tempfile(pattern = sprintf("bspline_%s_%02d_", out_prefix, i), fileext = ".tif")
@@ -167,7 +187,9 @@ interpolate_bspline <- function(x, output_dir,
         EPSILON = 0.000100,
         LEVEL_MAX = 14,
         TARGET_OUT_GRID = tmp_r)
-      if (!is.null(bspline$error)) return(NULL)
+      if (!is.null(bspline$error)) {
+        return(NULL)
+      }
       b <- qgis_as_terra(bspline$result)
       if (!delta && is_precip) {
         dmon <- month_days[i]
@@ -175,6 +197,7 @@ interpolate_bspline <- function(x, output_dir,
         b <- b / (86400 * dmon)
       }
       writeRaster(b, filename = out_file,
+                  overwrite = TRUE,
                   gdal = c("COMPRESS=LZW", "TFW=NO", "PREDICTOR=3"))
       return(terra::wrap(b))
     }, cl = parallel_cores)

@@ -34,8 +34,7 @@ processed_chelsa <- lapply(c("prec", "tmin", "tmax", "tmean"),
   load_exist = TRUE,
   dir = "/mnt/Data/CHELSA/v1.2",
   outdir = "02_data/02_processed/CHELSA",
-  cores = 5L
-)
+  cores = 5L)
 names(processed_chelsa) <- c("pr", "tasmin", "tasmax", "tas")
 str(processed_chelsa)
 
@@ -122,10 +121,11 @@ coarse_chelsa_clim <- lapply(fine_clim, interpolate_bspline,
   parallel_cores = 12,
   start_date = as.Date("1985-01-16"),
   outname_template = "CHELSA_coarse_%s_climatology.nc",
-  load_exist = TRUE
-)
+  load_exist = FALSE)
 names(coarse_chelsa_clim) <- c("pr", "tas", "tasmin", "tasmax")
 coarse_chelsa_clim
+
+#### FROM HERE ####
 
 #### TRACE ####
 # load in the downscaled Brown data

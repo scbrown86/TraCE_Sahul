@@ -191,3 +191,45 @@ done
 # update the log file
 echo "Processing finished: $(date)" >> "$LOG_FILE"
 echo "------------------------------------------" >> "$LOG_FILE"
+
+# concatentate the files
+
+conda deactivate || true
+conda activate nco_stable
+
+variables=("pr" "tas" "tasmax" "tasmin")
+
+for var in "${variables[@]}"; do
+	echo "processing variable: ${var}..."
+	
+	outfile="${BASE_DIR}/out/${var}/TraCE_downscaled_1500_1990_concat.nc"
+	echo "outfile = ${outfile}"
+	
+	find "${BASE_DIR}"/chunk_out/*/out/"${var}" -type f -name '*.nc' | sort -V > "${BASE_DIR}/${var}_concat_input_order.txt"
+	
+	cdo -O -L \
+        -settaxis,1500-01-16,,1month \
+        -setcalendar,365_day \
+        -cat \
+        -unpack \
+   		$(find "${BASE_DIR}"/chunk_out/*/out/"${var}" -type f -name '*.nc' | sort -V) \
+		"${outfile}"
+    
+    # use $outfile to generate monthly climatology from 1980 onwards
+    outclim="${BASE_DIR}/out/${var}/TraCE_downscaled_1980_1990_climatology.nc"
+
+    if [[ $var = "pr" ]]; then
+        cdo -O -L  setunit,'mm/month' \
+            -muldpm \
+            -mulc,86400 \
+            -ymonmean -selyear,1980/1989 \
+            ${outfile} ${outclim}
+    else
+        cdo -O -L  setunit,'deg_C' \
+            -subc,273.15 \
+            -ymonmean -selyear,1980/1989 \
+            ${outfile} ${outclim}
+    fi
+
+	echo "Done for variable: ${var}"
+done

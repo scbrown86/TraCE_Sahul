@@ -27,9 +27,10 @@ chelsa_proc <- function(variable, dir, outdir, type = "\\.tif$",
     if (length(fil.list.annual) < 12) {
       stop("Less than 12 months of data for year: ", year)
     }
-    chelsa <- rast(fil.list.annual)
+    # load and crop to AOI
+    chelsa <- rast(fil.list.annual, win = tras_ext, snap = "out")
     # crop CHELSA to extent of template raster and load into memory
-    chelsa <- crop(chelsa, tras_ext, snap = "out")
+    # chelsa <- crop(chelsa, tras_ext, snap = "out")
     if (!is.null(mask)) {
       if (inherits(x = mask, "PackedSpatVector")) {
         mask <- terra::unwrap(mask)
