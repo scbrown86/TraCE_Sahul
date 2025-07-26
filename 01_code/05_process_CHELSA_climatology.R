@@ -125,8 +125,6 @@ coarse_chelsa_clim <- lapply(fine_clim, interpolate_bspline,
 names(coarse_chelsa_clim) <- c("pr", "tas", "tasmin", "tasmax")
 coarse_chelsa_clim
 
-#### FROM HERE ####
-
 #### TRACE ####
 # load in the downscaled Brown data
 brown <- list.files("/media/dafcluster4/storage/TraCE_1500_1990CE/1500_1990/out",

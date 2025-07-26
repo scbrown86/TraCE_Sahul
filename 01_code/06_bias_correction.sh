@@ -8,12 +8,12 @@ cd "/home/dafcluster4/Documents/GitHub/TraCE_Sahul/" || {
 conda deactivate
 conda activate nco_stable
 
-input_base="02_data/03_CHELSA_paleo/out"
+input_base="/media/dafcluster4/storage/TraCE_1500_1990CE/1500_1990/out"
 delta_base="02_data/02_processed/deltas"
 variables=("pr" "tas" "tasmax" "tasmin")
 
 for var in "${variables[@]}"; do
-    input_file=$(find "$input_base/$var" -type f -name "*_1600_1990.nc" | head -n 1)
+    input_file=$(find "$input_base/$var" -type f -name "*_1500_1990_concat.nc" | head -n 1)
     delta_file=$(find "$delta_base" -type f -name "delta_fine_delta_${var}_climatology_ncdf4.nc" | head -n 1)
 
     if [[ ! -f "$input_file" ]]; then
@@ -36,23 +36,26 @@ for var in "${variables[@]}"; do
     grid_desc=$(mktemp --suffix ".txt")
 
     # unpack input to remove offset and scale
-    cdo -b F32 unpack "$input_file" "$tmp_unpacked"
+    cdo -L -P 100 -b F32 unpack "$input_file" "$tmp_unpacked"
 
     # remap delta to ensure that grids align
     # Could probably use remapnn as there should be no actual regridding?
     if [[ $var == "pr" ]]; then
-        remap_method="remapcon"
+        # remap_method="remapcon"
+        remap_method="remapnn"
+        export CDO_REMAP_NORM=destarea
+        export CDO_REMAP_MIN=0.10
     else
-        remap_method="remapbil"
+        remap_method="remapnn"
+        # remap_method="remapbil"
     fi
     cdo griddes "$input_file" >"$grid_desc"
-    cdo -P 64 -s "$remap_method","$grid_desc" "$delta_file" "$tmp_delta"
+    cdo -P 100 -s -w "$remap_method","$grid_desc" "$delta_file" "$tmp_delta"
 
     # apply the bias correction
     if [[ $var == "pr" ]]; then
         cdo -b F32 \
-            -setreftime,1600-01-16,,1month \
-            -settaxis,1600-01-16,,1month \
+            -settaxis,1500-01-16,,1month \
             -setcalendar,365_day \
             -setunit,'mm/month' \
             -muldpm \
@@ -60,16 +63,15 @@ for var in "${variables[@]}"; do
             -mul "$tmp_unpacked" "$tmp_delta" "$tmp_biascorr"
     else
         cdo -b F32 \
-            -setreftime,1600-01-16,,1month \
-            -settaxis,1600-01-16,,1month \
+            -settaxis,1500-01-16,,1month \
             -setcalendar,365_day \
             -setunit,'deg_C' \
             -subc,273.15 \
             -add "$tmp_unpacked" "$tmp_delta" "$tmp_biascorr"
     fi
     # pack once bias corrected
-    output_file="$input_base/$var/CHELSA_${var}_1600_1990_biascorr.nc"
-    cdo pack "$tmp_biascorr" "$output_file"
+    output_file="$input_base/$var/TraCE_22ka_downscaled_${var}_1500_1990_biascorr.nc"
+    cdo -P 100 -w -s pack "$tmp_biascorr" "$output_file"
     # delete temp files
     rm -rf "$tmp_unpacked" "$tmp_delta" "$tmp_biascorr" "$grid_desc"
     echo "Finished $var: $output_file"
