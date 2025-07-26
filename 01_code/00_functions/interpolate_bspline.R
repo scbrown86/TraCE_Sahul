@@ -195,6 +195,7 @@ interpolate_bspline <- function(x, output_dir,
       if (!delta && is_precip) {
         dmon <- month_days[i]
         b <- ifel(b < 1, 1, b)
+        b <- b + 0.0001
         b <- b / (86400 * dmon)
       }
       writeRaster(b, filename = out_file,
@@ -202,7 +203,6 @@ interpolate_bspline <- function(x, output_dir,
                   gdal = c("COMPRESS=LZW", "TFW=NO", "PREDICTOR=3"))
       return(terra::wrap(b))
     }, cl = parallel_cores)
-
     out_stack <- rast(lapply(interpolated, unwrap))
   }
   time(out_stack) <- seq(start_date, by = "month", length.out = 12)

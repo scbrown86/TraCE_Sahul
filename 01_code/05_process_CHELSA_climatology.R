@@ -144,17 +144,22 @@ if (!all(file.exists(brown_climatologies))) {
   # climatologies
   brown <- pblapply(brown, function(i) {
     r <- rast(i)
-    time(r) <- seq(as.Date("1600-01-16"), by = "month", l = nlyr(r))
+    time(r) <- seq(as.Date("1985-01-16"), by = "month", l = nlyr(r))
     r_u <- units(r)[1]
     r_v <- varnames(r[[1]])
     l_v <- longnames(r[[1]])
-    r <- r[[which(time(r) >= "1980-01-01")]] # 1980 onwards only
-    r <- tapp(r, "months", "mean")
+    r <- r*1
+    # r <- r[[which(time(r) >= "1980-01-01")]] # 1980 onwards only
+    # r <- tapp(r, "months", "mean")
     units(r) <- r_u
     crs(r) <- "EPSG:4326"
     if (r_u == "K") {
       r <- setValues(r, values(r) - 273.15)
       units(r) <- "deg_C"
+    }
+    if (r_u == "mm/month") {
+      r <- setValues(r, values(r) / (c(31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31) * 86400))
+      units(r) <- "kg/m2/s"
     }
     varnames(r) <- r_v
     longnames(r) <- l_v
@@ -192,10 +197,10 @@ rbind(
   minmax(coarse_trace_clim$pr * (c(31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31) * 86400))
 )
 
-delta_pr <- (coarse_chelsa_clim$pr * (c(31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31) * 86400) + 1) /
-  (coarse_trace_clim$pr * (c(31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31) * 86400) + 1)
+delta_pr <- coarse_chelsa_clim$pr / coarse_trace_clim$pr
 delta_pr
-plot(delta_pr, fun = function() lines(land, col = "#FFFFFF"))
+plot(delta_pr, fun = function() lines(land, col = "#FFFFFF"),
+     range = c(0, 7), fill_range = TRUE)
 
 delta_tas <- coarse_chelsa_clim$tas - coarse_trace_clim$tas
 delta_tas
@@ -222,16 +227,15 @@ deltas_fine <- lapply(deltas, interpolate_bspline,
   start_date = as.Date("1985-01-16"),
   outname_template = "delta_fine_%s_climatology.nc",
   load_exist = TRUE,
-  delta = TRUE
-)
+  delta = TRUE)
 names(deltas_fine) <- c("pr", "tas", "tasmin", "tasmax")
 deltas_fine
 
 # test adding the delta to brown downscaled
-brown_corrected <- lapply(list.files("02_data/03_CHELSA_paleo/out",
-  recursive = TRUE, pattern = "1600_1990.nc$",
+brown_corrected <- lapply(list.files("/media/dafcluster4/storage/TraCE_1500_1990CE/1500_1990/out",
+  recursive = TRUE, pattern = "1500_1990",
   full.names = TRUE
-), function(x) rast(x)[[1:12]])
+), function(x) rast(x, lyrs = 5869:5880)*1)
 names(brown_corrected) <- names(coarse_trace_clim)
 brown_corrected
 brown_corrected$pr <- brown_corrected$pr * deltas_fine$pr
@@ -240,17 +244,18 @@ brown_corrected$tasmin <- brown_corrected$tasmin + deltas_fine$tasmin
 brown_corrected$tasmax <- brown_corrected$tasmax + deltas_fine$tasmax
 brown_corrected
 
-plot(brown$pr, fun = function() lines(land, col = "#000000"))
-plot(brown_corrected$pr, fun = function() lines(land, col = "#000000"))
+par(mfrow = c(1,2))
+plot(app(rast(brown[1]), mean), fun = function() lines(land, col = "#000000"))
+plot(app(brown_corrected$pr, mean)*30*86400, fun = function() lines(land, col = "#000000"))
 
-plot(brown$tas, fun = function() lines(land, col = "#000000"))
-plot(brown_corrected$tas - 273.15, fun = function() lines(land, col = "#000000"))
+plot(app(rast(brown[2]), mean), fun = function() lines(land, col = "#000000"))
+plot(app(brown_corrected$tas, mean) - 273.15, fun = function() lines(land, col = "#000000"))
 
-plot(brown$tasmin, fun = function() lines(land, col = "#000000"))
-plot(brown_corrected$tasmin - 273.15, fun = function() lines(land, col = "#000000"))
+plot(app(rast(brown[4]), mean), fun = function() lines(land, col = "#000000"))
+plot(app(brown_corrected$tasmin, mean) - 273.15, fun = function() lines(land, col = "#000000"))
 
-plot(brown$tasmax, fun = function() lines(land, col = "#000000"))
-plot(brown_corrected$tasmax - 273.15, fun = function() lines(land, col = "#000000"))
+plot(app(rast(brown[3]), mean), fun = function() lines(land, col = "#000000"))
+plot(app(brown_corrected$tasmax, mean) - 273.15, fun = function() lines(land, col = "#000000"))
 
 # save the delta to netcdf
 source("01_code/00_functions/spatraster_to_netcdf.r")
@@ -262,17 +267,13 @@ time(deltas_fine$tasmin, tstep = "months") <- 1:12
 
 write_spatraster_ncdf(
   deltas_fine$pr,
-  "02_data/02_processed/deltas/delta_fine_delta_pr_climatology_ncdf4.nc"
-)
+  "02_data/02_processed/deltas/delta_fine_delta_pr_climatology_ncdf4.nc")
 write_spatraster_ncdf(
   deltas_fine$tas,
-  "02_data/02_processed/deltas/delta_fine_delta_tas_climatology_ncdf4.nc"
-)
+  "02_data/02_processed/deltas/delta_fine_delta_tas_climatology_ncdf4.nc")
 write_spatraster_ncdf(
   deltas_fine$tasmax,
-  "02_data/02_processed/deltas/delta_fine_delta_tasmax_climatology_ncdf4.nc"
-)
+  "02_data/02_processed/deltas/delta_fine_delta_tasmax_climatology_ncdf4.nc")
 write_spatraster_ncdf(
   deltas_fine$tasmin,
-  "02_data/02_processed/deltas/delta_fine_delta_tasmin_climatology_ncdf4.nc"
-)
+  "02_data/02_processed/deltas/delta_fine_delta_tasmin_climatology_ncdf4.nc")
