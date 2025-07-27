@@ -94,13 +94,13 @@ out_dir="/media/dafcluster4/storage/TraCE_22k_1500CE"
 for var in "${variables[@]}"; do
 	echo "processing variable: ${var}..."
 	
-	outfile="${out_dir}/TraCE_22k_1500CE_decadal_${var}_concat_biascorr.nc"
+	outfile="${out_dir}/out/${var}/TraCE_22ka_downscaled_${var}_decadal_21k_1500CE_biascorr.nc"
 	echo "outfile = ${outfile}"
 	
-	find "${input_base}"/*/out/"${var}" -type f -name '*biascorr.nc' > "${out_dir}/${var}_concat_input_order.txt"
+	find "${input_base}"/*/out/"${var}" -type f -name '*biascorr.nc' | sort -V > "${out_dir}/${var}_concat_input_order.txt"
 	
-	cdo -O --absolute_taxis pack -cat -unpack \
-		$(find "${input_base}"/*/out/"${var}" -type f -name '*biascorr.nc') \
+	cdo -P 100 -L -s -O --absolute_taxis pack -cat -unpack \
+		$(find "${input_base}"/*/out/"${var}" -type f -name '*biascorr.nc' | sort -V) \
 		"${outfile}"
 		
 	echo "resetting time dimension..."
