@@ -338,13 +338,3 @@ writeCDF(merc_template,
      varname = "elevation", longname = "Orographic elevation",
      unit = "m", prec = "float", compression = 1,
      missval = NA, overwrite = TRUE)
-
-# set up the CHELSA paleo folders
-sapply(
-     paste0(
-          "02_data/03_CHELSA_paleo/",
-          c("orog", "static", "clim", "out/tas", "out/tasmax", "out/tasmin", "out/pr")
-     ),
-     dir.create,
-     recursive = TRUE
-)

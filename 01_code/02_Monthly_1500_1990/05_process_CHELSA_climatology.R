@@ -19,6 +19,7 @@ plot(land)
 
 source("01_code/00_functions/interpolate_bspline.R")
 source("01_code/00_functions/chelsa_proc.R")
+
 #### CHELSA ####
 
 # load in CHELSA V1.2 data at original res
@@ -56,8 +57,7 @@ chelsa_climatologies <- c(
   "02_data/02_processed/CHELSA/CHELSA_pr_climatology.nc",
   "02_data/02_processed/CHELSA/CHELSA_tasmin_climatology.nc",
   "02_data/02_processed/CHELSA/CHELSA_tasmax_climatology.nc",
-  "02_data/02_processed/CHELSA/CHELSA_tas_climatology.nc"
-)
+  "02_data/02_processed/CHELSA/CHELSA_tas_climatology.nc")
 
 if (!all(file.exists(chelsa_climatologies))) {
   pr_avg <- tapp(pr_avg, idx, mean, cores = 12L)
@@ -76,29 +76,22 @@ if (!all(file.exists(chelsa_climatologies))) {
   writeCDF(pr_avg, "02_data/02_processed/CHELSA/CHELSA_pr_climatology.nc",
     varname = "pr", longname = "precipitation", # compression = 6L,
     unit = "kg/m2/s", zname = "time", prec = "float",
-    overwrite = TRUE
-  )
+    overwrite = TRUE)
   writeCDF(tmn_avg, "02_data/02_processed/CHELSA/CHELSA_tasmin_climatology.nc",
     varname = "tasmin",
     longname = "minimum near surface air temperature",
-    # compression = 6L,
     unit = "deg_C", zname = "time", prec = "float",
-    overwrite = TRUE
-  )
+    overwrite = TRUE)
   writeCDF(tmx_avg, "02_data/02_processed/CHELSA/CHELSA_tasmax_climatology.nc",
     varname = "tasmax",
     longname = "maximum near surface air temperature",
-    # compression = 6L,
     unit = "deg_C", zname = "time", prec = "float",
-    overwrite = TRUE
-  )
+    overwrite = TRUE)
   writeCDF(tas_avg, "02_data/02_processed/CHELSA/CHELSA_tas_climatology.nc",
     varname = "tas",
     longname = "mean near surface air temperature",
-    # compression = 6L,
     unit = "deg_C", zname = "time", prec = "float",
-    overwrite = TRUE
-  )
+    overwrite = TRUE)
 } else {
   pr_avg <- rast("02_data/02_processed/CHELSA/CHELSA_pr_climatology.nc")
   tmn_avg <- rast("02_data/02_processed/CHELSA/CHELSA_tasmin_climatology.nc")
@@ -135,8 +128,7 @@ brown_climatologies <- c(
   "02_data/02_processed/TRACE/TraCE_coarse_pr_climatology.nc",
   "02_data/02_processed/TRACE/TraCE_coarse_tas_climatology.nc",
   "02_data/02_processed/TRACE/TraCE_coarse_tasmax_climatology.nc",
-  "02_data/02_processed/TRACE/TraCE_coarse_tasmin_climatology.nc"
-)
+  "02_data/02_processed/TRACE/TraCE_coarse_tasmin_climatology.nc")
 
 if (!all(file.exists(brown_climatologies))) {
   # climatologies
@@ -147,8 +139,6 @@ if (!all(file.exists(brown_climatologies))) {
     r_v <- varnames(r[[1]])
     l_v <- longnames(r[[1]])
     r <- r*1
-    # r <- r[[which(time(r) >= "1980-01-01")]] # 1980 onwards only
-    # r <- tapp(r, "months", "mean")
     units(r) <- r_u
     crs(r) <- "EPSG:4326"
     if (r_u == "K") {
@@ -167,6 +157,7 @@ if (!all(file.exists(brown_climatologies))) {
   })
   names(brown) <- c("pr", "tas", "tasmax", "tasmin")
   brown
+
   # convert downscaled TraCE climatology to 0.5 degrees
   if (!dir.exists("02_data/02_processed/TRACE")) {
     dir.create("02_data/02_processed/TRACE", recursive = TRUE)
@@ -178,8 +169,7 @@ if (!all(file.exists(brown_climatologies))) {
     parallel_cores = 12,
     start_date = as.Date("1985-01-16"),
     outname_template = "TraCE_coarse_%s_climatology.nc",
-    load_exist = TRUE
-  )
+    load_exist = TRUE)
   names(coarse_trace_clim) <- c("pr", "tas", "tasmax", "tasmin")
   coarse_trace_clim
 } else {
@@ -192,8 +182,7 @@ coarse_trace_clim
 # create delta between the CHELSA and downscaled TraCE climatology
 rbind(
   minmax(coarse_chelsa_clim$pr * (c(31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31) * 86400)),
-  minmax(coarse_trace_clim$pr * (c(31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31) * 86400))
-)
+  minmax(coarse_trace_clim$pr * (c(31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31) * 86400)))
 
 delta_pr <- coarse_chelsa_clim$pr / coarse_trace_clim$pr
 delta_pr

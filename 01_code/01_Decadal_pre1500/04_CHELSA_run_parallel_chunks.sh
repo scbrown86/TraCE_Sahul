@@ -1,8 +1,5 @@
 #!/bin/bash
 
-# Source Conda setup
-# source ~/miniconda3/etc/profile.d/conda.sh
-
 # deactivate any conda environment
 conda deactivate || true
 
@@ -22,7 +19,7 @@ CLIM_OUT="${OUTPUT_BASE}/clim"
 ORO_OUT="${OUTPUT_BASE}/orog"
 STATIC_OUT="${OUTPUT_BASE}/static"
 
-# Local fast-write output dir (temporary)
+# Local temporary output dir
 LOCAL_OUT="${OUTPUT_BASE}/out"
 mkdir -p "$LOCAL_OUT/pr" "$LOCAL_OUT/tas" "$LOCAL_OUT/tasmax" "$LOCAL_OUT/tasmin"
 
@@ -46,7 +43,7 @@ export SCRATCH_DIR="/home/dafcluster4/scratch/"
 CLIM_FILES=(huss.nc pr.nc ta_high.nc ta_low.nc tasmax.nc tasmin.nc tas.nc uwind.nc vwind.nc zg_high.nc zg_low.nc)
 ORO_FILES=(oro.nc oro_high.nc)
 
-# Clear or create the log file
+# Start the log file
 echo "Processing started: $(date)" > "$LOG_FILE"
 echo "------------------------------------------" >> "$LOG_FILE"
 
@@ -112,7 +109,7 @@ for ((t=1; t<=TOTAL_TIMESTEPS; t+=CHUNK_SIZE)); do
 
     # singularity exec $SINGULARITY_IMG python $SCRIPT -t 1 -i "$INPUT_DIR" -o "$OUTPUT_DIR" -tmp "$SCRATCH_DIR"
 
-    # Run Python script in parallel
+    # Run Python script in parallel (-j 12 == 12 cores)
     seq $END -1 $START | parallel --bar -j 12 -k '
         TMP_PREFIX=$(printf "%04d" {}) &&
         TMP_DIR="$SCRATCH_DIR/tmp_$TMP_PREFIX/" &&
@@ -136,9 +133,9 @@ for ((t=1; t<=TOTAL_TIMESTEPS; t+=CHUNK_SIZE)); do
     find "$ORO_OUT" -type f -name "*.nc" -delete
     find "$SCRATCH_DIR" -type f  -delete
 
-    # Logging
+    # Log progress
     ELAPSED=$(($(date +%s) - START_TIME))
-    LOG_LINE=$(printf "Chunk %05d–%05d | Elapsed time: %d days %02d hours %02d min %02d sec\n" \
+    LOG_LINE=$(printf "Chunk %05d-%05d | Elapsed time: %d days %02d hours %02d min %02d sec\n" \
         "$t" "$t_end" \
         $((ELAPSED / 86400)) $((ELAPSED % 86400 / 3600)) $((ELAPSED % 3600 / 60)) $((ELAPSED % 60)))
     
@@ -150,7 +147,6 @@ for ((t=1; t<=TOTAL_TIMESTEPS; t+=CHUNK_SIZE)); do
     REMAINING_STEPS=$((TOTAL_TIMESTEPS / CHUNK_SIZE - COMPLETED_STEPS))
     AVG_TIME_PER_CHUNK=$((ELAPSED / 1))
 
-    # Optional: running average - store and average past chunk times
     if [ $COMPLETED_STEPS -eq 1 ]; then
         TOTAL_ELAPSED=$ELAPSED
     else
@@ -161,7 +157,7 @@ for ((t=1; t<=TOTAL_TIMESTEPS; t+=CHUNK_SIZE)); do
     REMAINING_SECONDS=$((AVG_TIME_PER_CHUNK * REMAINING_STEPS))
 
     PROGRESS_PERCENT=$(printf "%.2f" "$(echo "$COMPLETED_STEPS * 100 / ($TOTAL_TIMESTEPS / $CHUNK_SIZE)" | bc -l)")
-    ETA_LINE=$(printf "Estimated remaining time: %d days %02d hours %02d min %02d sec\n" \
+    ETA_LINE=$(printf "Estimated time remaining: %d days %02d hours %02d min %02d sec\n" \
         $((REMAINING_SECONDS / 86400)) \
         $((REMAINING_SECONDS % 86400 / 3600)) \
         $((REMAINING_SECONDS % 3600 / 60)) \
@@ -172,6 +168,6 @@ for ((t=1; t<=TOTAL_TIMESTEPS; t+=CHUNK_SIZE)); do
 
 done
 
-# Clear or create the log file
-echo "Processing finished: $(date)" > "$LOG_FILE"
+# Finish the log
+echo "Processing finished: $(date)" >> "$LOG_FILE"
 echo "------------------------------------------" >> "$LOG_FILE"

@@ -57,8 +57,6 @@ for file in ./*/*.nc; do
     rm -f "$regridded"
 done
 
-# cd "$output_root"
-
 # Loop directly over the subdirectories of $output_dir and concatenate
 for folder_path in "$output_root"/*/; do
     [[ -d "$folder_path" ]] || continue # skip if no match
@@ -73,14 +71,14 @@ for folder_path in "$output_root"/*/; do
         echo "Processing $folder_name with $file_count files…"
         output_file="${folder_path}/trace.01-36.22000BP-1990CE.cam2.h0.${folder_name}.0000101-2204012.Sahul.concat.nc"
         # Concatenate in that exact order
-        cdo -f nc4 -P 36 -O cat "${nc_files[@]}" "$output_file"
+        cdo -L -b F32 -f nc4 -P 100 -O cat "${nc_files[@]}" "$output_file"
         # correct the time dimension
         ncap2 -O -s 'time=array(-264479,1,$time)' "$output_file" "$output_file"
         ncatted -O -a units,time,o,c,"months before 1989-12-16" -a calendar,time,o,c,"365_day" -a axis,time,o,c,"T" -a long_name,time,o,c,"time" "$output_file"
         # add calendar month and year helper variable
         ncap2 -O -s 'base_yr=1989; month[$time]=12 - ((-time[$time]) % 12); month@long_name="calendar month (1-12)"; year[$time]=base_yr + long(time[$time]/12); year@long_name="calendar year";' "$output_file" "$output_file"
     else
-        echo "Skipping $folder_name — found $file_count files, expected 36"
+        echo "Skipping $folder_name. Found $file_count files, expected 36."
     fi
 done
 
@@ -96,24 +94,22 @@ for concat_file in "$output_root"/*/*Sahul.concat.nc; do
     output_file="${outroot}/trace.01-35.22000BP-1500CE.cam2.h0.${var}.0000101-258600.Sahul.decavg.concat.nc"
     # if final final exists, skip
     if [[ -f "$output_file" ]]; then
-        echo "Skipping ${var} – already processed: $output_file"
+        echo "Skipping ${var} - already processed: $output_file"
         continue
     fi
     # else, loop through decades here
     for ((step = 1; step <= 258600; step += 120)); do
-        #echo "$step"
         end=$((step + 119))
-        #echo "$end"
         outfile="${outroot}/decadal_mon_avg_${step}_${end}.nc"
         if [[ -f "$outfile" ]]; then
-            echo "Skipping – already processed: $outfile"
+            echo "Skipping - already processed: $outfile"
             continue
         fi
         # generate temporary file of 120 steps
         # Then calculate the multiyear-monthly mean of each of these files
         tmpfile="$filepath"/temp_decadal_${step}.nc
         # time is irrelevant here, just for assigning months
-        cdo -w -s ymonmean -settaxis,2000-01-16,,1month -setcalendar,365_day -seltimestep,$step/$end,1 "$concat_file" "$tmpfile"
+        cdo -L -w -s ymonmean -settaxis,2000-01-16,,1month -setcalendar,365_day -seltimestep,$step/$end,1 "$concat_file" "$tmpfile"
         # now correct the time scale. start and end years stored as helper variables.
         mid=$(((step + end) / 2))
         ncap2 -O -s 'time=array(0.083f,0.083f,$time)' "$tmpfile" "$tmpfile"
@@ -137,8 +133,8 @@ for concat_file in "$output_root"/*/*Sahul.concat.nc; do
         echo "Processing $outroot with $file_count files…"
         output_file="${outroot}/trace.01-35.22000BP-1500CE.cam2.h0.${var}.0000101-258600.Sahul.decavg.concat.nc"
         # Concatenate in that exact order
-        cdo -s -w -f nc4 -P 36 -O cat "${nc_files[@]}" "$output_file"
+        cdo -L -s -w -b F32 -f nc4 -P 100 -O cat "${nc_files[@]}" "$output_file"
     else
-        echo "Skipping $folder_name — found $file_count files, expected 36"
+        echo "Skipping $folder_name. Found $file_count files, expected 36."
     fi
 done

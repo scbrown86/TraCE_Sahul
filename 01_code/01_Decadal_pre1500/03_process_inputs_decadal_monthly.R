@@ -13,8 +13,6 @@ template <- rast(extent = ext(-180, 180, -90, 90), res = 3.75, val = 1L)
 template <- crop(template, ext(105, 161.25, -50, 10), snap = "out")
 template
 
-# setwd("/home/dafcluster4/Documents/GitHub/TraCE_Sahul")
-
 # need to create the following input files
 # INPUT DATA - CLIMATE DATA
 # files to be stored in a subdirectory /clim

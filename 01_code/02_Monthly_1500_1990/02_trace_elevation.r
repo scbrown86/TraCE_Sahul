@@ -19,9 +19,6 @@ elev
 years <- as.numeric(sub(".*_([0-9]+\\.[0-9]+)k_.*", "\\1", list.files("/media/dafcluster4/storage/Ice5g/", full.names = FALSE, pattern = ".nc$")))*1000
 years*-1
 time(elev) <- years
-# full_years <- c(seq(from = 0, to = -21000, by = -10), 
-#                 seq(from = -17000, to = -21000, by = -10))
-# full_years
 
 elev_interp <- enmSdmX::interpolateRasts(rasts = elev[[1:2]], 
                                          interpFrom = time(elev[[1:2]]),
@@ -29,9 +26,7 @@ elev_interp <- enmSdmX::interpolateRasts(rasts = elev[[1:2]],
                                          type = "linear",
                                          verbose = TRUE)
 time(elev_interp) <- seq(1950, by = -50, l = nlyr(elev_interp))
-elev_interp #2201 layers
 elev_interp <- setValues(elev_interp, round(values(elev_interp), 1))
-elev_interp
 elev_interp <- elev_interp[[rev(1:nlyr(elev_interp))]] # reverse order so 1950CE is last
 elev_interp
 
@@ -51,7 +46,7 @@ plot(elev_interp[[11]],
 plot(landmask, fun = function() lines(land))
 par(mfrow = c(1, 1))
 
-landmask <- ifel(landmask < 0.10, NA, 1) # less than 20% land, consider ocean
+landmask <- ifel(landmask < 0.10, NA, 1) # less than 10% land, consider ocean
 plot(landmask, fun = function() lines(land))
 landmask <- project(crop(landmask, ext(elev), snap = "out"), template, "near")
 landmask

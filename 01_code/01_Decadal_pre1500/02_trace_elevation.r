@@ -19,9 +19,6 @@ elev
 years <- as.numeric(sub(".*_([0-9]+\\.[0-9]+)k_.*", "\\1", list.files("/media/dafcluster4/storage/Ice5g/", full.names = FALSE, pattern = ".nc$")))*1000
 years*-1
 time(elev) <- years
-# full_years <- c(seq(from = 0, to = -21000, by = -10), 
-#                 seq(from = -17000, to = -21000, by = -10))
-# full_years
 
 elev_interp <- enmSdmX::interpolateRasts(rasts = c(elev, elev[[39]]), 
                                          interpFrom = c(time(elev), 22000),
@@ -73,8 +70,7 @@ plot(merge(
   mask(project(mask(elev_interp[[2155]], landmask_fine[[2155]], inverse = TRUE), landmask[[2155]], "average"),
     landmask[[2155]],
     inverse = TRUE
-  )), fun = function() lines(land)
-)
+  )), fun = function() lines(land))
 
 identical(time(elev_interp), time(landmask_fine))
 
@@ -82,9 +78,7 @@ elev_coarse <- merge(
   mask(project(mask(elev_interp, landmask_fine), landmask, "max"), landmask),
   mask(project(mask(elev_interp, landmask_fine, inverse = TRUE), landmask, "average"),
     landmask,
-    inverse = TRUE
-  )
-)
+    inverse = TRUE))
 elev_coarse
 elev_coarse <- setValues(elev_coarse, round(values(elev_coarse), 2))
 plot(elev_coarse[[c(1, 2155)]],
@@ -93,10 +87,11 @@ plot(elev_coarse[[c(1, 2155)]],
   fun = function() {
     lines(as.polygons(landmask[[c(1, 2155)]]), lwd = 1.5)
     lines(land)
-  }
-)
+  })
 
 # writeCDF
 names(elev_coarse) <- rcarbon::BCADtoBP(time(elev_coarse))
 depth(elev_coarse) <- NULL
-writeCDF(elev_coarse, "./02_data/01_inputs/TraCE21_elevation_22kaBP_1490CE.nc", varname = "elevation", longname = "elevation", unit = "m", compression = 1, overwrite = TRUE)
+writeCDF(elev_coarse, "/02_data/01_inputs/TraCE21_elevation_22kaBP_1490CE.nc", 
+         varname = "elevation", longname = "elevation", 
+         unit = "m", compression = 1, overwrite = TRUE)

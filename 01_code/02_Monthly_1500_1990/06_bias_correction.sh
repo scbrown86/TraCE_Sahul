@@ -39,7 +39,7 @@ for var in "${variables[@]}"; do
     cdo -L -P 100 -b F32 unpack "$input_file" "$tmp_unpacked"
 
     # remap delta to ensure that grids align
-    # Could probably use remapnn as there should be no actual regridding?
+    # Could/should probably use remapnn as there should be no actual regridding?
     if [[ $var == "pr" ]]; then
         # remap_method="remapcon"
         remap_method="remapnn"
@@ -48,6 +48,8 @@ for var in "${variables[@]}"; do
     else
         remap_method="remapnn"
         # remap_method="remapbil"
+        unset CDO_REMAP_NORM
+        unset CDO_REMAP_MIN
     fi
     cdo griddes "$input_file" >"$grid_desc"
     cdo -P 100 -s -w "$remap_method","$grid_desc" "$delta_file" "$tmp_delta"

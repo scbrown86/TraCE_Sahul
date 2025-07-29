@@ -1,5 +1,33 @@
 #!/bin/bash
 
+# ================================================================================
+# IMPORTANT:
+# Monthly data downscaling must be done before bias-correcting the decadal data!
+#
+# Run all scripts in 01_code/02_Monthly_1500_1990/ up to and including:
+# '02_Monthly_1500_1990/05_process_CHELSA_climatology.R' before proceeding.
+# ================================================================================
+
+# List of required delta files
+required_delta_files=(
+  "02_data/02_processed/deltas/delta_fine_delta_pr_climatology_ncdf4.nc"
+  "02_data/02_processed/deltas/delta_fine_delta_tas_climatology_ncdf4.nc"
+  "02_data/02_processed/deltas/delta_fine_delta_tasmax_climatology_ncdf4.nc"
+  "02_data/02_processed/deltas/delta_fine_delta_tasmin_climatology_ncdf4.nc")
+
+# Check that delta files exist or exit.
+for file in "${required_delta_files[@]}"; do
+  if [[ ! -f "$file" ]]; then
+    echo "ERROR: Required file not found: $file"
+    echo ""
+    echo "IMPORTANT:"
+    echo "Monthly data downscaling must be completed before bias-correcting the decadal data!"
+    echo "Run all scripts up to and including:"
+    echo "'02_Monthly_1500_1990/05_process_CHELSA_climatology.R' before proceeding."
+    exit 1
+  fi
+done
+
 cd "/media/dafcluster4/storage/TraCE_22k_1500CE/" || {
     echo "Failed to change directory. Exiting."
     exit 1
@@ -42,14 +70,20 @@ for chunk_dir in "${input_base}"/[0-9][0-9][0-9][0-9][0-9]_[0-9][0-9][0-9][0-9][
         cdo -P 100 -b F32 unpack "${concat_file}" "${tmp_unpacked}"
         
         # Choose remap method
+        # Could/should probably use remapnn as there should be no actual regridding?
         if [[ "${var}" == "pr" ]]; then
-            remap_method="-remapcon"
-        else
+            # remap_method="-remapcon"
             remap_method="-remapnn"
+            export CDO_REMAP_NORM="destarea"
+            export REMAP_AREA_MIN=0.10
+        else
+            # remap_method="-remapbil"
+            remap_method="-remapnn"
+            unset CDO_REMAP_NORM
+            unset REMAP_AREA_MIN
         fi
         
-        # remap delta to ensure that grids align
-        # Could probably use remapnn as there should be no actual regridding?
+        # remap delta to ensure that grids align        
         cdo griddes "${tmp_unpacked}" > "${grid_desc}"
         cdo -s -w -P 100 unpack "${remap_method},${grid_desc}" "${delta_file}" "${tmp_delta}"
 
@@ -79,7 +113,6 @@ for chunk_dir in "${input_base}"/[0-9][0-9][0-9][0-9][0-9]_[0-9][0-9][0-9][0-9][
         cdo -b F32 unpack "${tmp_biascorr}" "${biascorr_file}"
 
         # Clean up temporary files
-        # find "${var_dir}" -type f -name "$(basename "${concat_file}")" -delete
         rm -f "${tmp_unpacked}" "${tmp_delta}" "${tmp_biascorr}" "${grid_desc}"
 
         echo "  Finished ${var} for chunk ${chunk_name}"

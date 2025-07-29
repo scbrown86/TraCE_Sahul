@@ -32,26 +32,26 @@ for folder in */ ; do
     # the inputs have already been remapped, cropped to Sahul, and adjusted as needed
     # just need to grab the appropriate timesteps and reset the calendar
     if [[ "$var" == "T" || "$var" == "Z3" ]]; then
-        cdo -L -setreftime,1500-01-16,,1month \
+        cdo -w -s -L -setreftime,1500-01-16,,1month \
             -settaxis,1500-01-16,,1month \
             -setcalendar,365_day \
             -seltimestep,258601/264480 \
             "$infile" "$outname"
     elif [[ "$var" == "RELHUM" || "$var" == "U" || "$var" == "V" ]]; then
-        cdo -L --reduce_dim \
+        cdo -w -s -L --reduce_dim \
             -setreftime,1500-01-16,,1month \
             -settaxis,1500-01-16,,1month \
             -setcalendar,365_day \
             -seltimestep,258601/264480 \
             "$infile" "$outname"
     elif [[ "$var" == "PRECC" || "$var" == "PRECL" ]]; then
-        cdo -L -setreftime,1500-01-16,,1month \
+        cdo -w -s -L -setreftime,1500-01-16,,1month \
             -settaxis,1500-01-16,,1month \
             -setcalendar,365_day \
             -seltimestep,258601/264480 \
             "$infile" "$outname"
     else
-        cdo -L -setreftime,1500-01-16,,1month \
+        cdo -w -s -L -setreftime,1500-01-16,,1month \
             -settaxis,1500-01-16,,1month \
             -setcalendar,365_day \
             -seltimestep,258601/264480 \
