@@ -4,9 +4,11 @@ koppen_summary <- function(grids) {
     vars <- grids[[i]]
     var_extract <- lapply(seq_along(vars), function(j,...) {
       vj <- vars[[j]]
+      vju <- units(vj)[1]
       vj <- tapp(vj, "years", "mean")
       crs(vj) <- "EPSG:4326"
       zt <- time(vj)
+      units(vj) <- vju
       # convert to degC if appropriate
       vj_units <- tryCatch(terra::units(vj)[1], error = function(e) NULL)
       vj_units <- if (!is.null(vj_units) && trimws(vj_units) != "") trimws(vj_units) else NULL
@@ -19,7 +21,7 @@ koppen_summary <- function(grids) {
         # If no units attribute, check global max
         ## precip not an issue as kg/m2/s
         vmax <- unlist(terra::global(vj, "max", na.rm = TRUE)[1])[1]
-        if (isTRUE(vmax > 100)) { # arbitrarily high value
+        if (isTRUE(vmax > 500)) { # arbitrarily high value
           vj <- setValues(vj, values(vj) - 273.15)
           terra::units(vj) <- "deg_C"
         }
@@ -37,7 +39,7 @@ koppen_summary <- function(grids) {
         rz[, variable := varnames(vars[[j]])[1]]
       }
       rz[, Year := as.integer(sapply(strsplit(x = as.character(Year), "_"), tail, 1))]
-      fout <- file.path(sprintf("scratch/var_extract_%s_%s.RDS", i, j))
+      fout <- file.path(sprintf("03_comparisons/scratch/var_extract_%s_%s.RDS", i, j))
       saveRDS(rz, fout)
       return(rz)
     })

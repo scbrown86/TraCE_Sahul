@@ -62,6 +62,8 @@ rsconnect/
 02_data/02_processed/**/*.tif
 02_data/02_processed/**/*.nc
 
+03_comparisons/*.tif
+
 # ignore temp delta file
 delta_remapped_tmp.nc
 02_data/02_processed/oro_high.nc

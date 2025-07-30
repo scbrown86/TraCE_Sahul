@@ -10,11 +10,11 @@ agcd_proc <- function(variable, dir, template, years,
   # extract the years from fil.list
   ann_NCI <- pblapply(years, function(year, ...) {
     fil.list.annual <- fil.list[grepl(pattern = year, fil.list)]
-    nci_ras <- rast(fil.list.annual)
+    nci_ras <- rast(fil.list.annual, win = ext(template))
     # convert from mm/month to kg/m2/s
-    if (variable == "precip") {
-      nci_ras <- nci_ras/(86400*c(31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31))
-    }
+    # if (variable == "precip") {
+    #   nci_ras <- nci_ras/(86400*c(31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31))
+    # }
     z <- time(nci_ras)
     # project to area
     nci_ras <- project(nci_ras, template, method = proj_method,
