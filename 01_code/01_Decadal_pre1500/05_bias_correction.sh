@@ -77,7 +77,7 @@ for chunk_dir in "${input_base}"/[0-9][0-9][0-9][0-9][0-9]_[0-9][0-9][0-9][0-9][
             export CDO_REMAP_NORM=destarea
             export REMAP_AREA_MIN=0.00
         else
-            remap_method="-remapbil"
+            remap_method="-remapcon"
             # remap_method="-remapnn"
             export CDO_REMAP_NORM=fracarea
             export REMAP_AREA_MIN=0.00
