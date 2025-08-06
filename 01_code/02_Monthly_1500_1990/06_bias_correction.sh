@@ -72,9 +72,9 @@ for var in "${variables[@]}"; do
             -subc,273.15 \
             -add "$tmp_unpacked" "$tmp_delta" "$tmp_biascorr"
     fi
-    # pack once bias corrected
-    echo "Copying and packing bias corrected file to ${output_file}"
+    # pack once bias corrected    
     output_file="$input_base/$var/TraCE_22ka_downscaled_${var}_1500_1990_biascorr.nc"
+    echo "Copying and packing bias corrected file to ${output_file}"
     cdo -O -L -P 100 -w pack "$tmp_biascorr" "$output_file"
     # delete temp files
     rm -rf "$tmp_unpacked" "$tmp_delta" "$tmp_biascorr" "$grid_desc"
