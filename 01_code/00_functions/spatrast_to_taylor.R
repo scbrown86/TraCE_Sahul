@@ -195,7 +195,6 @@ taylor_from_sds_monthly <- function(obs_sds, mod_sds, var_name, zones = NULL,
   invisible(NULL)
 }
 
-
 taylor_diagram <- function (ref, model, add = FALSE, col = "red", pch = 19, pos.cor = TRUE,
                             xlab = "Standard deviation", ylab = "", main = "Taylor Diagram",
                             show.gamma = TRUE, ngamma = 3, gamma.col = 8, sd.arcs = 0,
@@ -382,12 +381,3 @@ taylor_diagram <- function (ref, model, add = FALSE, col = "red", pch = 19, pos.
          cex = pcex)
   invisible(oldpar)
 }
-
-# sig_digits <- function(x) {
-#   x <- signif(x, 11)
-#   x_str <- format(x, scientific = TRUE)
-#   parts <- unlist(strsplit(x_str, "e"))
-#   digits <- gsub("\\.", "", parts[1])
-#   digits <- gsub("^0+", "", digits)
-#   nchar(digits)
-# }

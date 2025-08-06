@@ -11,7 +11,7 @@ cd /home/dafcluster4/Documents/GitHub/TraCE_Sahul
 # Input directories
 BASE_DIR="/media/dafcluster4/storage/TraCE_1500_1990CE/1500_1990"
 CLIM_DIR="${BASE_DIR}/clim"
-ORO_DIR="/media/dafcluster4/storage/TraCE_22k_1500CE/orog" # orog from paleo runs
+ORO_DIR="/media/dafcluster4/storage/TraCE_22k_1500CE/orog"                        # orog from paleo runs
 STATIC_FILE="/media/dafcluster4/storage/TraCE_22k_1500CE/static/merc_template.nc" # static template from paleo runs
 LOG_FILE="${BASE_DIR}/processing_time.txt"
 
@@ -34,30 +34,30 @@ in_high_oro="${ORO_DIR}/oro_high.nc"
 out_high_oro="${ORO_OUT}/oro_high.nc"
 in_oro="${ORO_DIR}/oro.nc"
 out_oro="${ORO_OUT}/oro.nc"
-cdo -L -w -s seltimestep,2155 "$in_high_oro" "$out_high_oro"  > /dev/null 2>&1
-cdo -L -w -s seltimestep,2155 "$in_oro" "$out_oro"  > /dev/null 2>&1
+cdo -L -w -s seltimestep,2155 "$in_high_oro" "$out_high_oro" >/dev/null 2>&1
+cdo -L -w -s seltimestep,2155 "$in_oro" "$out_oro" >/dev/null 2>&1
 # need to remap the oro_high to the coarse resolution
 ## "Clean" the netcdf files
-gdal_translate "${ORO_OUT}/oro_high.nc" "${ORO_OUT}/oro_high.tif" > /dev/null 2>&1
-gdal_translate "${ORO_OUT}/oro_high.tif" "${ORO_OUT}/oro_high.nc" > /dev/null 2>&1
-gdal_translate "${ORO_OUT}/oro.nc" "${ORO_OUT}/oro.tif" > /dev/null 2>&1
-gdal_translate "${ORO_OUT}/oro.tif" "${ORO_OUT}/oro.nc" > /dev/null 2>&1
-    
+gdal_translate "${ORO_OUT}/oro_high.nc" "${ORO_OUT}/oro_high.tif" >/dev/null 2>&1
+gdal_translate "${ORO_OUT}/oro_high.tif" "${ORO_OUT}/oro_high.nc" >/dev/null 2>&1
+gdal_translate "${ORO_OUT}/oro.nc" "${ORO_OUT}/oro.tif" >/dev/null 2>&1
+gdal_translate "${ORO_OUT}/oro.tif" "${ORO_OUT}/oro.nc" >/dev/null 2>&1
+
 # regridding high res to coarse res
 ncpdq -D 0 -O -U "${ORO_OUT}/oro_high.nc" "${ORO_OUT}/oro_high.nc" # need to "unpack" data before regridding
-ncremap -D 0 -a nco_con -t 100 -d "${ORO_OUT}/oro.nc" "${ORO_OUT}/oro_high.nc" "${ORO_OUT}/oro_remap.nc" > /dev/null 2>&1
+ncremap -D 0 -a nco_con -t 100 -d "${ORO_OUT}/oro.nc" "${ORO_OUT}/oro_high.nc" "${ORO_OUT}/oro_remap.nc" >/dev/null 2>&1
 cdo -s -w -L -b F32 -selgrid,2 "${ORO_OUT}/oro_remap.nc" "${ORO_OUT}/oro_remap2.nc"
 cdo -s -w -L -b F32 setmisstoc,0 -remapnn,"${ORO_OUT}/oro_remap2.nc" "${ORO_OUT}/oro_remap2.nc" "${ORO_OUT}/oro_remap.nc"
 rm -f "${ORO_OUT}/oro_remap2.nc"
-    
+
 # ensure orographic and bathymetric coverage at coarse resolution
-cdo -O -b F32 -s -w -L ifthenelse "${ORO_OUT}/oro_remap.nc" "${ORO_OUT}/oro_remap.nc" "${ORO_OUT}/oro.nc" "${ORO_OUT}/oro_remap2.nc" 
+cdo -O -b F32 -s -w -L ifthenelse "${ORO_OUT}/oro_remap.nc" "${ORO_OUT}/oro_remap.nc" "${ORO_OUT}/oro.nc" "${ORO_OUT}/oro_remap2.nc"
 cdo -s -w -L copy "${ORO_OUT}/oro_remap2.nc" "${ORO_OUT}/oro.nc"
 rm -f "${ORO_OUT}/oro_remap.nc" "${ORO_OUT}/oro_remap2.nc" "${ORO_OUT}/oro_high.tif" "${ORO_OUT}/oro.tif"
-    
+
 # "Clean" final version
-gdal_translate "${ORO_OUT}/oro.nc" "${ORO_OUT}/oro.tif" > /dev/null 2>&1
-gdal_translate "${ORO_OUT}/oro.tif" "${ORO_OUT}/oro.nc" > /dev/null 2>&1
+gdal_translate "${ORO_OUT}/oro.nc" "${ORO_OUT}/oro.tif" >/dev/null 2>&1
+gdal_translate "${ORO_OUT}/oro.tif" "${ORO_OUT}/oro.nc" >/dev/null 2>&1
 rm -f "${ORO_OUT}/oro.tif"
 
 conda deactivate
@@ -80,31 +80,31 @@ export SCRATCH_DIR="/home/dafcluster4/scratch/"
 CLIM_FILES=(huss.nc pr.nc ta_high.nc ta_low.nc tasmax.nc tasmin.nc tas.nc uwind.nc vwind.nc zg_high.nc zg_low.nc)
 
 # Start the log file
-echo "Processing started: $(date)" > "$LOG_FILE"
-echo "------------------------------------------" >> "$LOG_FILE"
+echo "Processing started: $(date)" >"$LOG_FILE"
+echo "------------------------------------------" >>"$LOG_FILE"
 
 # Loop over each time chunk
-for ((t=1; t<=TOTAL_TIMESTEPS; t+=CHUNK_SIZE)); do
+for ((t = 1; t <= TOTAL_TIMESTEPS; t += CHUNK_SIZE)); do
     t_end=$((t + CHUNK_SIZE - 1))
 
     # Cap t_end at TOTAL_TIMESTEPS if it exceeds it
-    if (( t_end > TOTAL_TIMESTEPS )); then
+    if ((t_end > TOTAL_TIMESTEPS)); then
         t_end=$TOTAL_TIMESTEPS
     fi
 
-    aux_step=$(( (t - 1) / CHUNK_SIZE + 1 ))  # 1-indexed
+    aux_step=$(((t - 1) / CHUNK_SIZE + 1)) # 1-indexed
 
     echo "Processing timestep range: ${t}-${t_end}"
 
     START_TIME=$(date +%s)
-    
+
     conda activate nco_stable
 
     # Subset clim files
     for file in "${CLIM_FILES[@]}"; do
         infile="${CLIM_DIR}/${file}"
         outfile="${CLIM_OUT}/${file}"
-        cdo -L -w -s seltimestep,"${t}/${t_end}" "$infile" "$outfile" > /dev/null 2>&1
+        cdo -L -w -s seltimestep,"${t}/${t_end}" "$infile" "$outfile" >/dev/null 2>&1
     done
 
     export OUTPUT_DIR="$LOCAL_OUT/"
@@ -112,8 +112,8 @@ for ((t=1; t<=TOTAL_TIMESTEPS; t+=CHUNK_SIZE)); do
     export END=1200
 
     # if processing final chunk, only 1080 steps
-    if (( t_end == TOTAL_TIMESTEPS )); then
-        export END=1080        
+    if ((t_end == TOTAL_TIMESTEPS)); then
+        export END=1080
     fi
 
     conda deactivate || true
@@ -147,16 +147,16 @@ for ((t=1; t<=TOTAL_TIMESTEPS; t+=CHUNK_SIZE)); do
     find "$LOCAL_OUT" -type f -name "*.nc" -delete
     find "$CLIM_OUT" -type f -name "*.nc" -delete
     # find "$ORO_OUT" -type f -name "*.nc" -delete
-    find "$SCRATCH_DIR" -type f  -delete
+    find "$SCRATCH_DIR" -type f -delete
 
     # Log progress
     ELAPSED=$(($(date +%s) - START_TIME))
     LOG_LINE=$(printf "Chunk %05d-%05d | Elapsed time: %d days %02d hours %02d min %02d sec\n" \
         "$t" "$t_end" \
         $((ELAPSED / 86400)) $((ELAPSED % 86400 / 3600)) $((ELAPSED % 3600 / 60)) $((ELAPSED % 60)))
-    
+
     echo "$LOG_LINE"
-    echo "$LOG_LINE" >> "$LOG_FILE"
+    echo "$LOG_LINE" >>"$LOG_FILE"
 
     COMPLETED_STEPS=$((aux_step))
     REMAINING_STEPS=$((TOTAL_TIMESTEPS / CHUNK_SIZE - COMPLETED_STEPS))
@@ -183,8 +183,8 @@ for ((t=1; t<=TOTAL_TIMESTEPS; t+=CHUNK_SIZE)); do
 done
 
 # Finish the log
-echo "Processing finished: $(date)" >> "$LOG_FILE"
-echo "------------------------------------------" >> "$LOG_FILE"
+echo "Processing finished: $(date)" >>"$LOG_FILE"
+echo "------------------------------------------" >>"$LOG_FILE"
 
 # concatentate the files
 conda deactivate || true
@@ -193,36 +193,54 @@ conda activate nco_stable
 variables=("pr" "tas" "tasmax" "tasmin")
 
 for var in "${variables[@]}"; do
-	echo "processing variable: ${var}..."
-	
-	outfile="${BASE_DIR}/out/${var}/TraCE_downscaled_1500_1990_concat.nc"
-	echo "outfile = ${outfile}"
-	
-	find "${BASE_DIR}"/chunk_out/*/out/"${var}" -type f -name '*.nc' | sort -V > "${BASE_DIR}/${var}_concat_input_order.txt"
-	
-	cdo -O -L \
+    echo "processing variable: ${var}..."
+
+    outfile="${BASE_DIR}/out/${var}/TraCE_downscaled_1500_1990_concat.nc"
+    echo "outfile = ${outfile}"
+
+    find "${BASE_DIR}"/chunk_out/*/out/"${var}" -type f -name '*.nc' | sort -V >"${BASE_DIR}/${var}_concat_input_order.txt"
+
+    cdo -O -L \
         -settaxis,1500-01-16,,1month \
         -setcalendar,365_day \
         -cat \
         -unpack \
-   		$(find "${BASE_DIR}"/chunk_out/*/out/"${var}" -type f -name '*.nc' | sort -V) \
-		"${outfile}"
-    
+        $(find "${BASE_DIR}"/chunk_out/*/out/"${var}" -type f -name '*.nc' | sort -V) \
+        "${outfile}"
+
     # use $outfile to generate monthly climatology from 1980 onwards
     outclim="${BASE_DIR}/out/${var}/TraCE_downscaled_1980_1990_climatology.nc"
 
     if [[ $var = "pr" ]]; then
-        cdo -O -L  setunit,'mm/month' \
+        cdo -O -L setunit,'mm/month' \
             -muldpm \
             -mulc,86400 \
             -ymonmean -selyear,1980/1989 \
             ${outfile} ${outclim}
     else
-        cdo -O -L  setunit,'deg_C' \
+        cdo -O -L setunit,'deg_C' \
             -subc,273.15 \
             -ymonmean -selyear,1980/1989 \
             ${outfile} ${outclim}
     fi
 
-	echo "Done for variable: ${var}"
+    echo "Done for variable: ${var}"
 done
+
+cdo -f nc sellonlatbox,105,161.25,-52.5,11.25 -const,1,global_0.5 "${BASE_DIR}/out/agg_target.nc"
+export CDO_REMAP_NORM=destarea
+export REMAP_AREA_MIN=0.00
+cdo -P 100 gencon,"${BASE_DIR}/out/agg_target.nc" "${BASE_DIR}/out/pr/TraCE_downscaled_1980_1990_climatology.nc" "${BASE_DIR}/out/pr_weights.nc"
+export CDO_REMAP_NORM=fracarea
+export REMAP_AREA_MIN=0.00
+cdo -P 100 gencon,"${BASE_DIR}/out/agg_target.nc" "${BASE_DIR}/out/tas/TraCE_downscaled_1980_1990_climatology.nc" "${BASE_DIR}/out/tas_weights.nc"
+
+export CDO_REMAP_NORM=destarea
+export REMAP_AREA_MIN=0.00
+cdo -s -b F32 -P 100 remap,"${BASE_DIR}/out/agg_target.nc","${BASE_DIR}/out/pr_weights.nc" "${BASE_DIR}/out/pr/TraCE_downscaled_1980_1990_climatology.nc" "${BASE_DIR}/out/pr/TraCE_downscaled_1980_1990_climatology_coarse.nc"
+
+export CDO_REMAP_NORM=fracarea
+export REMAP_AREA_MIN=0.00
+cdo -s -b F32 -P 100 remap,"${BASE_DIR}/out/agg_target.nc","${BASE_DIR}/out/tas_weights.nc" "${BASE_DIR}/out/tas/TraCE_downscaled_1980_1990_climatology.nc" "${BASE_DIR}/out/tas/TraCE_downscaled_1980_1990_climatology_coarse.nc"
+cdo -s -b F32 -P 100 remap,"${BASE_DIR}/out/agg_target.nc","${BASE_DIR}/out/tas_weights.nc" "${BASE_DIR}/out/tasmax/TraCE_downscaled_1980_1990_climatology.nc" "${BASE_DIR}/out/tasmax/TraCE_downscaled_1980_1990_climatology_coarse.nc"
+cdo -s -b F32 -P 100 remap,"${BASE_DIR}/out/agg_target.nc","${BASE_DIR}/out/tas_weights.nc" "${BASE_DIR}/out/tasmin/TraCE_downscaled_1980_1990_climatology.nc" "${BASE_DIR}/out/tasmin/TraCE_downscaled_1980_1990_climatology_coarse.nc"

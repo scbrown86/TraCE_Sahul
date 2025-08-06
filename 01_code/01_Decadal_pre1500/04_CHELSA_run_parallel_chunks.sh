@@ -24,7 +24,7 @@ LOCAL_OUT="${OUTPUT_BASE}/out"
 mkdir -p "$LOCAL_OUT/pr" "$LOCAL_OUT/tas" "$LOCAL_OUT/tasmax" "$LOCAL_OUT/tasmin"
 
 mkdir -p "$CLIM_OUT" "$ORO_OUT" "$STATIC_OUT"
-cp -n "$STATIC_FILE" "$STATIC_OUT/"  # only copy if not already there
+cp -n "$STATIC_FILE" "$STATIC_OUT/" # only copy if not already there
 
 # Constants
 TOTAL_TIMESTEPS=25860
@@ -44,56 +44,56 @@ CLIM_FILES=(huss.nc pr.nc ta_high.nc ta_low.nc tasmax.nc tasmin.nc tas.nc uwind.
 ORO_FILES=(oro.nc oro_high.nc)
 
 # Start the log file
-echo "Processing started: $(date)" > "$LOG_FILE"
-echo "------------------------------------------" >> "$LOG_FILE"
+echo "Processing started: $(date)" >"$LOG_FILE"
+echo "------------------------------------------" >>"$LOG_FILE"
 
 # Loop over each time chunk
-for ((t=1; t<=TOTAL_TIMESTEPS; t+=CHUNK_SIZE)); do
+for ((t = 1; t <= TOTAL_TIMESTEPS; t += CHUNK_SIZE)); do
     t_end=$((t + CHUNK_SIZE - 1))
-    aux_step=$(( (t - 1) / CHUNK_SIZE + 1 ))  # 1-indexed
+    aux_step=$(((t - 1) / CHUNK_SIZE + 1)) # 1-indexed
 
     echo "Processing timestep range: ${t}-${t_end} (aux_step: $aux_step)"
 
     START_TIME=$(date +%s)
-    
+
     conda activate nco_stable
 
     # Subset clim files
     for file in "${CLIM_FILES[@]}"; do
         infile="${CLIM_DIR}/${file}"
         outfile="${CLIM_OUT}/${file}"
-        cdo -L -w -s seltimestep,"${t}/${t_end}" "$infile" "$outfile" > /dev/null 2>&1
+        cdo -L -w -s seltimestep,"${t}/${t_end}" "$infile" "$outfile" >/dev/null 2>&1
     done
 
     # Subset oro files
     for file in "${ORO_FILES[@]}"; do
         infile="${ORO_DIR}/${file}"
         outfile="${ORO_OUT}/${file}"
-        cdo -L -w -s seltimestep,"${aux_step}" "$infile" "$outfile" > /dev/null 2>&1
+        cdo -L -w -s seltimestep,"${aux_step}" "$infile" "$outfile" >/dev/null 2>&1
     done
 
     # need to remap the oro_high to the coarse resolution
     ## "Clean" the netcdf files
-    gdal_translate "${ORO_OUT}/oro_high.nc" "${ORO_OUT}/oro_high.tif" > /dev/null 2>&1
-    gdal_translate "${ORO_OUT}/oro_high.tif" "${ORO_OUT}/oro_high.nc" > /dev/null 2>&1
-    gdal_translate "${ORO_OUT}/oro.nc" "${ORO_OUT}/oro.tif" > /dev/null 2>&1
-    gdal_translate "${ORO_OUT}/oro.tif" "${ORO_OUT}/oro.nc" > /dev/null 2>&1
-    
+    gdal_translate "${ORO_OUT}/oro_high.nc" "${ORO_OUT}/oro_high.tif" >/dev/null 2>&1
+    gdal_translate "${ORO_OUT}/oro_high.tif" "${ORO_OUT}/oro_high.nc" >/dev/null 2>&1
+    gdal_translate "${ORO_OUT}/oro.nc" "${ORO_OUT}/oro.tif" >/dev/null 2>&1
+    gdal_translate "${ORO_OUT}/oro.tif" "${ORO_OUT}/oro.nc" >/dev/null 2>&1
+
     # regridding high res to coarse res
     ncpdq -D 0 -O -U "${ORO_OUT}/oro_high.nc" "${ORO_OUT}/oro_high.nc" # need to "unpack" data before regridding
-    ncremap -D 0 -a nco_con -t 100 -d "${ORO_OUT}/oro.nc" "${ORO_OUT}/oro_high.nc" "${ORO_OUT}/oro_remap.nc" > /dev/null 2>&1
+    ncremap -D 0 -a nco_con -t 100 -d "${ORO_OUT}/oro.nc" "${ORO_OUT}/oro_high.nc" "${ORO_OUT}/oro_remap.nc" >/dev/null 2>&1
     cdo -s -w -L -b F32 -selgrid,2 "${ORO_OUT}/oro_remap.nc" "${ORO_OUT}/oro_remap2.nc"
     cdo -s -w -L -b F32 setmisstoc,0 -remapnn,"${ORO_OUT}/oro_remap2.nc" "${ORO_OUT}/oro_remap2.nc" "${ORO_OUT}/oro_remap.nc"
     rm -f "${ORO_OUT}/oro_remap2.nc"
-    
+
     # ensure orographic and bathymetric coverage at coarse resolution
-    cdo -O -b F32 -s -w -L ifthenelse "${ORO_OUT}/oro_remap.nc" "${ORO_OUT}/oro_remap.nc" "${ORO_OUT}/oro.nc" "${ORO_OUT}/oro_remap2.nc" 
+    cdo -O -b F32 -s -w -L ifthenelse "${ORO_OUT}/oro_remap.nc" "${ORO_OUT}/oro_remap.nc" "${ORO_OUT}/oro.nc" "${ORO_OUT}/oro_remap2.nc"
     cdo -s -w -L copy "${ORO_OUT}/oro_remap2.nc" "${ORO_OUT}/oro.nc"
     rm -f "${ORO_OUT}/oro_remap.nc" "${ORO_OUT}/oro_remap2.nc" "${ORO_OUT}/oro_high.tif" "${ORO_OUT}/oro.tif"
-    
+
     # "Clean" final version
-    gdal_translate "${ORO_OUT}/oro.nc" "${ORO_OUT}/oro.tif" > /dev/null 2>&1
-    gdal_translate "${ORO_OUT}/oro.tif" "${ORO_OUT}/oro.nc" > /dev/null 2>&1
+    gdal_translate "${ORO_OUT}/oro.nc" "${ORO_OUT}/oro.tif" >/dev/null 2>&1
+    gdal_translate "${ORO_OUT}/oro.tif" "${ORO_OUT}/oro.nc" >/dev/null 2>&1
     rm -f "${ORO_OUT}/oro.tif"
 
     export OUTPUT_DIR="$LOCAL_OUT/"
@@ -131,16 +131,16 @@ for ((t=1; t<=TOTAL_TIMESTEPS; t+=CHUNK_SIZE)); do
     find "$LOCAL_OUT" -type f -name "*.nc" -delete
     find "$CLIM_OUT" -type f -name "*.nc" -delete
     find "$ORO_OUT" -type f -name "*.nc" -delete
-    find "$SCRATCH_DIR" -type f  -delete
+    find "$SCRATCH_DIR" -type f -delete
 
     # Log progress
     ELAPSED=$(($(date +%s) - START_TIME))
     LOG_LINE=$(printf "Chunk %05d-%05d | Elapsed time: %d days %02d hours %02d min %02d sec\n" \
         "$t" "$t_end" \
         $((ELAPSED / 86400)) $((ELAPSED % 86400 / 3600)) $((ELAPSED % 3600 / 60)) $((ELAPSED % 60)))
-    
+
     echo "$LOG_LINE"
-    echo "$LOG_LINE" >> "$LOG_FILE"
+    echo "$LOG_LINE" >>"$LOG_FILE"
 
     # Estimate remaining time
     COMPLETED_STEPS=$((aux_step))
@@ -169,5 +169,5 @@ for ((t=1; t<=TOTAL_TIMESTEPS; t+=CHUNK_SIZE)); do
 done
 
 # Finish the log
-echo "Processing finished: $(date)" >> "$LOG_FILE"
-echo "------------------------------------------" >> "$LOG_FILE"
+echo "Processing finished: $(date)" >>"$LOG_FILE"
+echo "------------------------------------------" >>"$LOG_FILE"

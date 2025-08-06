@@ -19,6 +19,7 @@ plot(land)
 
 source("01_code/00_functions/interpolate_bspline.R")
 source("01_code/00_functions/chelsa_proc.R")
+source("01_code/00_functions/qmap_precip_delta.R")
 
 #### CHELSA ####
 
@@ -123,6 +124,8 @@ coarse_chelsa_clim
 brown <- list.files("/media/dafcluster4/storage/TraCE_1500_1990CE/1500_1990/out",
   recursive = TRUE, pattern = "1980_1990",
   full.names = TRUE)
+brown <- brown[!grepl("coarse", brown)]
+brown
 
 brown_climatologies <- c(
   "02_data/02_processed/TRACE/TraCE_coarse_pr_climatology.nc",
@@ -184,11 +187,45 @@ rbind(
   minmax(coarse_chelsa_clim$pr * (c(31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31) * 86400)),
   minmax(coarse_trace_clim$pr * (c(31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31) * 86400)))
 
-delta_pr <- coarse_chelsa_clim$pr / coarse_trace_clim$pr
+# use qmap procedure for generating pr delta
+delta_pr <- qmap_pr_delta(chelsa_coarse_clim = coarse_chelsa_clim$pr,
+                          trace_coarse_clim = coarse_trace_clim$pr,
+                          high_res_template = rast(brown[1], lyrs = 1), # downscaled output
+                          resample_delta = "cubicspline")
 delta_pr
 plot(delta_pr, fun = function() lines(land, col = "#FFFFFF"),
-     range = c(0, 7), fill_range = TRUE)
+     range = c(0.5, 2.5), fill_range = TRUE,
+     col = hcl.colors(100, "Batlow", rev = TRUE))
 
+# quick test of delta pr
+test_pr <- rast(brown[1])
+time(test_pr) <- time(coarse_trace_clim$pr)
+plot(app(test_pr, sum), range = c(200, 4500), fill_range = TRUE,
+     main = "raw total rainfall",
+     fun = function() lines(land),
+     col = hcl.colors(100, "YlGnBu", rev = TRUE))
+plot(app(test_pr * delta_pr, sum),
+     main = "bias corrected total rainfall",
+     fun = function() lines(land),
+     range = c(200, 4500), fill_range = TRUE,
+     col = hcl.colors(100, "YlGnBu", rev = TRUE))
+
+# save to netcdf
+time(delta_pr) <- seq(as.Date("1985-01-16"), by = "month", length.out = 12)
+units(delta_pr) <- ""
+varnames(delta_pr) <- "delta"
+longnames(delta_pr) <- "precipitation delta (multiplicative)"
+message("Writing b-spline files to netcdf...")
+writeCDF(delta_pr,
+         filename = "02_data/02_processed/deltas/delta_fine_delta_pr_climatology.nc",
+         varname = "delta",
+         longname = "precipitation delta (multiplicative)",
+         unit = "",
+         zname = "time",
+         prec = "float",
+         overwrite = TRUE)
+
+# temperature delta
 delta_tas <- coarse_chelsa_clim$tas - coarse_trace_clim$tas
 delta_tas
 plot(delta_tas, fun = function() lines(land, col = "#FFFFFF"))
@@ -202,10 +239,11 @@ delta_tasmax
 plot(delta_tasmax, fun = function() lines(land, col = "#FFFFFF"))
 
 # convert the delta back to 0.05 degrees using b-splines
+## don't need to do this for pr, already 0.05°
 if (!dir.exists("02_data/02_processed/deltas")) {
   dir.create("02_data/02_processed/deltas", recursive = TRUE)
 }
-deltas <- list(delta_pr, delta_tas, delta_tasmin, delta_tasmax)
+deltas <- list(delta_tas, delta_tasmin, delta_tasmax)
 deltas_fine <- lapply(deltas, interpolate_bspline,
   output_dir = "02_data/02_processed/deltas",
   bspline_ext = ext(105.0, 161.25, -52.5, 11.25),
@@ -215,45 +253,19 @@ deltas_fine <- lapply(deltas, interpolate_bspline,
   outname_template = "delta_fine_%s_climatology.nc",
   load_exist = TRUE,
   delta = TRUE)
-names(deltas_fine) <- c("pr", "tas", "tasmin", "tasmax")
+names(deltas_fine) <- c("tas", "tasmin", "tasmax")
 deltas_fine
 
-# test adding the delta to brown downscaled
-brown_corrected <- lapply(list.files("/media/dafcluster4/storage/TraCE_1500_1990CE/1500_1990/out",
-  recursive = TRUE, pattern = "1500_1990",
-  full.names = TRUE
-), function(x) rast(x, lyrs = 5869:5880)*1)
-names(brown_corrected) <- names(coarse_trace_clim)
-brown_corrected
-brown_corrected$pr <- brown_corrected$pr * deltas_fine$pr
-brown_corrected$tas <- brown_corrected$tas + deltas_fine$tas
-brown_corrected$tasmin <- brown_corrected$tasmin + deltas_fine$tasmin
-brown_corrected$tasmax <- brown_corrected$tasmax + deltas_fine$tasmax
-brown_corrected
-
-par(mfrow = c(1,2))
-plot(app(rast(brown[1]), mean), fun = function() lines(land, col = "#000000"))
-plot(app(brown_corrected$pr, mean)*30*86400, fun = function() lines(land, col = "#000000"))
-
-plot(app(rast(brown[2]), mean), fun = function() lines(land, col = "#000000"))
-plot(app(brown_corrected$tas, mean) - 273.15, fun = function() lines(land, col = "#000000"))
-
-plot(app(rast(brown[4]), mean), fun = function() lines(land, col = "#000000"))
-plot(app(brown_corrected$tasmin, mean) - 273.15, fun = function() lines(land, col = "#000000"))
-
-plot(app(rast(brown[3]), mean), fun = function() lines(land, col = "#000000"))
-plot(app(brown_corrected$tasmax, mean) - 273.15, fun = function() lines(land, col = "#000000"))
-
-# save the delta to netcdf
+# save the deltas to netcdf
 source("01_code/00_functions/spatraster_to_netcdf.r")
 
-time(deltas_fine$pr, tstep = "months") <- 1:12
+time(delta_pr, tstep = "months") <- 1:12
 time(deltas_fine$tas, tstep = "months") <- 1:12
 time(deltas_fine$tasmax, tstep = "months") <- 1:12
 time(deltas_fine$tasmin, tstep = "months") <- 1:12
 
 write_spatraster_ncdf(
-  deltas_fine$pr,
+  delta_pr,
   "02_data/02_processed/deltas/delta_fine_delta_pr_climatology_ncdf4.nc")
 write_spatraster_ncdf(
   deltas_fine$tas,

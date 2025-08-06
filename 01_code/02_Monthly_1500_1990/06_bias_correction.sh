@@ -36,35 +36,36 @@ for var in "${variables[@]}"; do
     grid_desc=$(mktemp --suffix ".txt")
 
     # unpack input to remove offset and scale
-    cdo -L -P 100 -b F32 unpack "$input_file" "$tmp_unpacked"
+    echo "Unpacking ${input_file} to ${tmp_unpacked}..."
+    cdo -L -w -P 100 -b F32 unpack "$input_file" "$tmp_unpacked"
 
     # remap delta to ensure that grids align
     # Could/should probably use remapnn as there should be no actual regridding?
     if [[ $var == "pr" ]]; then
-        # remap_method="remapcon"
-        remap_method="remapnn"
+        remap_method="remapcon"
+        # remap_method="remapnn"
         export CDO_REMAP_NORM=destarea
-        export CDO_REMAP_MIN=0.10
+        export CDO_REMAP_MIN=0.00
     else
-        remap_method="remapnn"
-        # remap_method="remapbil"
-        unset CDO_REMAP_NORM
-        unset CDO_REMAP_MIN
+        # remap_method="remapnn"
+        remap_method="remapbil"
+        export CDO_REMAP_NORM=fracarea
+        export CDO_REMAP_MIN=0.00
     fi
     cdo griddes "$input_file" >"$grid_desc"
     cdo -P 100 -s -w "$remap_method","$grid_desc" "$delta_file" "$tmp_delta"
 
     # apply the bias correction
+    echo "Applying bias correction..."
     if [[ $var == "pr" ]]; then
-        cdo -b F32 \
+        cdo -O -b F32 setunit,'mm/month' \
+            -muldpm \
             -settaxis,1500-01-16,,1month \
             -setcalendar,365_day \
-            -setunit,'mm/month' \
-            -muldpm \
             -mulc,86400 \
             -mul "$tmp_unpacked" "$tmp_delta" "$tmp_biascorr"
     else
-        cdo -b F32 \
+        cdo -O -b F32 \
             -settaxis,1500-01-16,,1month \
             -setcalendar,365_day \
             -setunit,'deg_C' \
@@ -72,8 +73,9 @@ for var in "${variables[@]}"; do
             -add "$tmp_unpacked" "$tmp_delta" "$tmp_biascorr"
     fi
     # pack once bias corrected
+    echo "Copying and packing bias corrected file to ${output_file}"
     output_file="$input_base/$var/TraCE_22ka_downscaled_${var}_1500_1990_biascorr.nc"
-    cdo -P 100 -w -s pack "$tmp_biascorr" "$output_file"
+    cdo -O -L -P 100 -w pack "$tmp_biascorr" "$output_file"
     # delete temp files
     rm -rf "$tmp_unpacked" "$tmp_delta" "$tmp_biascorr" "$grid_desc"
     echo "Finished $var: $output_file"

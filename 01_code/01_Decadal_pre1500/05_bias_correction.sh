@@ -10,22 +10,22 @@
 
 # List of required delta files
 required_delta_files=(
-  "02_data/02_processed/deltas/delta_fine_delta_pr_climatology_ncdf4.nc"
-  "02_data/02_processed/deltas/delta_fine_delta_tas_climatology_ncdf4.nc"
-  "02_data/02_processed/deltas/delta_fine_delta_tasmax_climatology_ncdf4.nc"
-  "02_data/02_processed/deltas/delta_fine_delta_tasmin_climatology_ncdf4.nc")
+    "/home/dafcluster4/Documents/GitHub/TraCE_Sahul/02_data/02_processed/deltas/delta_fine_delta_pr_climatology_ncdf4.nc"
+    "/home/dafcluster4/Documents/GitHub/TraCE_Sahul/02_data/02_processed/deltas/delta_fine_delta_tas_climatology_ncdf4.nc"
+    "/home/dafcluster4/Documents/GitHub/TraCE_Sahul/02_data/02_processed/deltas/delta_fine_delta_tasmax_climatology_ncdf4.nc"
+    "/home/dafcluster4/Documents/GitHub/TraCE_Sahul/02_data/02_processed/deltas/delta_fine_delta_tasmin_climatology_ncdf4.nc")
 
 # Check that delta files exist or exit.
 for file in "${required_delta_files[@]}"; do
-  if [[ ! -f "$file" ]]; then
-    echo "ERROR: Required file not found: $file"
-    echo ""
-    echo "IMPORTANT:"
-    echo "Monthly data downscaling must be completed before bias-correcting the decadal data!"
-    echo "Run all scripts up to and including:"
-    echo "'02_Monthly_1500_1990/05_process_CHELSA_climatology.R' before proceeding."
-    exit 1
-  fi
+    if [[ ! -f "$file" ]]; then
+        echo "ERROR: Required file not found: $file"
+        echo ""
+        echo "IMPORTANT:"
+        echo "Monthly data downscaling must be completed before bias-correcting the decadal data!"
+        echo "Run all scripts up to and including:"
+        echo "'02_Monthly_1500_1990/05_process_CHELSA_climatology.R' before proceeding."
+        exit 1
+    fi
 done
 
 cd "/media/dafcluster4/storage/TraCE_22k_1500CE/" || {
@@ -34,14 +34,14 @@ cd "/media/dafcluster4/storage/TraCE_22k_1500CE/" || {
 }
 
 conda deactivate || true
-conda activate nco_stable 
+conda activate nco_stable
 
 input_base="/media/dafcluster4/storage/TraCE_22k_1500CE/chunk_out"
 delta_base="/home/dafcluster4/Documents/GitHub/TraCE_Sahul/02_data/02_processed/deltas"
 variables=("pr" "tas" "tasmax" "tasmin")
 
 for chunk_dir in "${input_base}"/[0-9][0-9][0-9][0-9][0-9]_[0-9][0-9][0-9][0-9][0-9]; do
-    chunk_name=$(basename "$chunk_dir")          # e.g. 00001_00012 ... 25849_25860
+    chunk_name=$(basename "$chunk_dir") # e.g. 00001_00012 ... 25849_25860
     out_dir="${chunk_dir}/out"
 
     echo "Processing chunk: ${chunk_name}"
@@ -59,48 +59,46 @@ for chunk_dir in "${input_base}"/[0-9][0-9][0-9][0-9][0-9]_[0-9][0-9][0-9][0-9][
             echo "  Delta file not found for ${var}; skipping"
             continue
         fi
-       
+
         # temp files
         tmp_unpacked=$(mktemp --suffix "_${var}_unpacked.nc")
-        tmp_delta=$(mktemp   --suffix "_${var}_remap.nc")
+        tmp_delta=$(mktemp --suffix "_${var}_remap.nc")
         tmp_biascorr=$(mktemp --suffix "_${var}_biascorr.nc")
-        grid_desc=$(mktemp   --suffix ".txt")
-        
+        grid_desc=$(mktemp --suffix ".txt")
+
         # Unpack to remove scale/offset
-        cdo -P 100 -b F32 unpack "${concat_file}" "${tmp_unpacked}"
-        
+        cdo -P 100 -O -b F32 unpack "${concat_file}" "${tmp_unpacked}"
+
         # Choose remap method
         # Could/should probably use remapnn as there should be no actual regridding?
         if [[ "${var}" == "pr" ]]; then
-            # remap_method="-remapcon"
-            remap_method="-remapnn"
-            export CDO_REMAP_NORM="destarea"
-            export REMAP_AREA_MIN=0.10
+            remap_method="-remapcon"
+            # remap_method="-remapnn"
+            export CDO_REMAP_NORM=destarea
+            export REMAP_AREA_MIN=0.00
         else
-            # remap_method="-remapbil"
-            remap_method="-remapnn"
-            unset CDO_REMAP_NORM
-            unset REMAP_AREA_MIN
+            remap_method="-remapbil"
+            # remap_method="-remapnn"
+            export CDO_REMAP_NORM=fracarea
+            export REMAP_AREA_MIN=0.00
         fi
-        
-        # remap delta to ensure that grids align        
-        cdo griddes "${tmp_unpacked}" > "${grid_desc}"
+
+        # remap delta to ensure that grids align
+        cdo griddes "${tmp_unpacked}" >"${grid_desc}"
         cdo -s -w -P 100 unpack "${remap_method},${grid_desc}" "${delta_file}" "${tmp_delta}"
 
         # Apply bias correction
         if [[ "${var}" == "pr" ]]; then
             # needs a time axis to multiply by days per month
             cdo -P 100 -b F32 \
-                setunit,'mm/month' \
+                -setunit,'mm/month' \
                 -muldpm \
-                -setreftime,2000-01-16,,1month \
                 -settaxis,2000-01-16,,1month \
                 -setcalendar,365_day \
                 -mulc,86400 \
                 -mul "${tmp_unpacked}" "${tmp_delta}" "${tmp_biascorr}"
         else
             cdo -P 100 -b F32 \
-                -setreftime,2000-01-16,,1month \
                 -settaxis,2000-01-16,,1month \
                 -setcalendar,365_day \
                 -setunit,'deg_C' \
@@ -109,8 +107,8 @@ for chunk_dir in "${input_base}"/[0-9][0-9][0-9][0-9][0-9]_[0-9][0-9][0-9][0-9][
         fi
 
         # Don't store with compressed data
-        echo "  Writing bias‑corrected file: ${biascorr_file}"
-        cdo -b F32 unpack "${tmp_biascorr}" "${biascorr_file}"
+        echo "  Writing bias-corrected file: ${biascorr_file}"
+        cdo -O -b F32 unpack "${tmp_biascorr}" "${biascorr_file}"
 
         # Clean up temporary files
         rm -f "${tmp_unpacked}" "${tmp_delta}" "${tmp_biascorr}" "${grid_desc}"
@@ -125,19 +123,19 @@ done
 # concatentate the bias corrected files
 out_dir="/media/dafcluster4/storage/TraCE_22k_1500CE"
 for var in "${variables[@]}"; do
-	echo "processing variable: ${var}..."
-	
-	outfile="${out_dir}/out/${var}/TraCE_22ka_downscaled_${var}_decadal_21k_1500CE_biascorr.nc"
-	echo "outfile = ${outfile}"
-	
-	find "${input_base}"/*/out/"${var}" -type f -name '*biascorr.nc' | sort -V > "${out_dir}/${var}_concat_input_order.txt"
-	
-	cdo -P 100 -L -s -O --absolute_taxis pack -cat -unpack \
-		$(find "${input_base}"/*/out/"${var}" -type f -name '*biascorr.nc' | sort -V) \
-		"${outfile}"
-		
-	echo "resetting time dimension..."
-	ncap2 -O -s 'time=array(1,1,$time); time@units=""' "${outfile}" "${outfile}"
-	
-	echo "Done for variable: ${var}"
+    echo "processing variable: ${var}..."
+
+    outfile="${out_dir}/out/${var}/TraCE_22ka_downscaled_${var}_decadal_21k_1500CE_biascorr.nc"
+    echo "outfile = ${outfile}"
+
+    find "${input_base}"/*/out/"${var}" -type f -name '*biascorr.nc' | sort -V >"${out_dir}/${var}_concat_input_order.txt"
+
+    cdo -P 100 -L -s -O --absolute_taxis pack -cat -unpack \
+        $(find "${input_base}"/*/out/"${var}" -type f -name '*biascorr.nc' | sort -V) \
+        "${outfile}"
+
+    echo "resetting time dimension..."
+    ncap2 -O -s 'time=array(1,1,$time); time@units=""' "${outfile}" "${outfile}"
+
+    echo "Done for variable: ${var}"
 done

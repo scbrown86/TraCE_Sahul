@@ -9,8 +9,8 @@ output_dir="/media/dafcluster4/storage/TraCE_Monthly"
 cd "$base_dir" || exit 1
 
 # Loop over each subdirectory
-for folder in */ ; do
-    var="${folder%/}"  # Remove trailing slash to get the variable name
+for folder in */; do
+    var="${folder%/}" # Remove trailing slash to get the variable name
     if [[ "$var" == "LANDFRAC" ]]; then
         continue
     fi
@@ -61,4 +61,3 @@ for folder in */ ; do
 done
 
 cd "$output_dir"
-

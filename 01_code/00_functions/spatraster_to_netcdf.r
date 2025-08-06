@@ -1,21 +1,8 @@
-#' Write a terra SpatRaster (or list/sds of SpatRaster objects) to NetCDF
-#'
-#' @param x          A terra::SpatRaster, terra::sds, or list of SpatRaster objects.
-#' @param filename   File name for the NetCDF file to be written.
-#' @param global_atts Named list of global attributes to embed in the NetCDF file.
-#' @param compression Deflate level (0–9) passed to ncvar_def() when netCDF‑4
-#'                    is created. Ignored for classic NetCDF.
-#' @param force_v4    Logical; passed to nc_create().  `TRUE` (default) writes
-#'                    a NetCDF‑4 file so that compression can be used.
-#'
-#' @return Invisibly returns the file name on success (and writes the file).
-#' @export
-#'
 write_spatraster_ncdf <- function(x,
                                   filename,
                                   global_atts = list(
                                       title      = "Created from terra SpatRaster",
-                                      history    = paste("file written on", format(Sys.time(), "%Y‑%m‑%d %H:%M:%S %Z")),
+                                      history    = paste("file written on", format(Sys.time(), "%Y-%m-%d %H:%M:%S %Z")),
                                       source     = "write_spatraster_ncdf()"
                                   ),
                                   compression = 4L,
@@ -23,7 +10,7 @@ write_spatraster_ncdf <- function(x,
     require(terra)
     require(ncdf4)
     stopifnull <- function(obj, what) {
-        if (is.null(obj)) stop(sprintf("Missing %s on at least one raster – cannot proceed.", what), call. = FALSE)
+        if (is.null(obj)) stop(sprintf("Missing %s on at least one raster - cannot proceed.", what), call. = FALSE)
     }
     trim_is_blank <- function(x) all(trimws(as.character(x)) == "")
     infer_nc_prec <- function(x) {
@@ -58,7 +45,7 @@ write_spatraster_ncdf <- function(x,
     ref <- rasters[[1]]
     for (i in seq_along(rasters)) {
         if (!terra::compareGeom(ref, rasters[[i]], stopOnError = FALSE)) {
-            stop(sprintf("Geometry of raster %s does not match the first raster – all inputs must share grid and CRS.", names(rasters)[i]), call. = FALSE)
+            stop(sprintf("Geometry of raster %s does not match the first raster - all inputs must share grid and CRS.", names(rasters)[i]), call. = FALSE)
         }
     }
     # extract lon/lat
