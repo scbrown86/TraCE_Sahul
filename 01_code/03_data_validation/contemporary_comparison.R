@@ -30,8 +30,9 @@ brown <- pblapply(brown, function(x) {
   time(r) <- seq(as.Date("1900-01-16"), by = "month", l = nlyr(r))
   r
 })
-names(brown) <- c("pr", "tas", "tasmax", "tasmin")
 brown <- sds(brown)
+names(brown) <- c("pr", "tas", "tasmax", "tasmin")
+time(brown) <- seq(as.Date("1900-01-16"), by = "month", l = nlyr(brown$pr))
 brown
 
 # load in AGCD and project to area
@@ -304,7 +305,7 @@ merged[, `:=`(mean = mean[!is.na(mean)][1],
               SD = SD[!is.na(SD)][1]), by = .(Koppen, variable, MODEL)]
 
 
-p1 <- ggplot(data = step_summaries_roll[MODEL %in% c("BROWN", "AGCD"), ],
+p1 <- ggplot(data = step_summaries_roll[MODEL %in% c("BROWN"),], #, "AGCD"), ],
              aes(x = Year, y = roll_mean,
                  group = interaction(Koppen, MODEL),
                  colour = MODEL, fill = MODEL)) +

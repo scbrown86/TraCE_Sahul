@@ -228,19 +228,20 @@ for var in "${variables[@]}"; do
 done
 
 cdo -f nc sellonlatbox,105,161.25,-52.5,11.25 -const,1,global_0.5 "${BASE_DIR}/out/agg_target.nc"
-export CDO_REMAP_NORM=destarea
-export REMAP_AREA_MIN=0.00
+export CDO_REMAP_NORM="destarea"
+export REMAP_AREA_MIN=0.10
 cdo -P 100 gencon,"${BASE_DIR}/out/agg_target.nc" "${BASE_DIR}/out/pr/TraCE_downscaled_1980_1990_climatology.nc" "${BASE_DIR}/out/pr_weights.nc"
-export CDO_REMAP_NORM=fracarea
-export REMAP_AREA_MIN=0.00
+export CDO_REMAP_NORM="fracarea"
+export REMAP_AREA_MIN=0.10
 cdo -P 100 gencon,"${BASE_DIR}/out/agg_target.nc" "${BASE_DIR}/out/tas/TraCE_downscaled_1980_1990_climatology.nc" "${BASE_DIR}/out/tas_weights.nc"
 
-export CDO_REMAP_NORM=destarea
-export REMAP_AREA_MIN=0.00
+export CDO_REMAP_NORM="destarea"
+export REMAP_AREA_MIN=0.10
 cdo -s -b F32 -P 100 remap,"${BASE_DIR}/out/agg_target.nc","${BASE_DIR}/out/pr_weights.nc" "${BASE_DIR}/out/pr/TraCE_downscaled_1980_1990_climatology.nc" "${BASE_DIR}/out/pr/TraCE_downscaled_1980_1990_climatology_coarse.nc"
 
-export CDO_REMAP_NORM=fracarea
-export REMAP_AREA_MIN=0.00
+export CDO_REMAP_NORM="fracarea"
+export REMAP_AREA_MIN=0.10
 cdo -s -b F32 -P 100 remap,"${BASE_DIR}/out/agg_target.nc","${BASE_DIR}/out/tas_weights.nc" "${BASE_DIR}/out/tas/TraCE_downscaled_1980_1990_climatology.nc" "${BASE_DIR}/out/tas/TraCE_downscaled_1980_1990_climatology_coarse.nc"
 cdo -s -b F32 -P 100 remap,"${BASE_DIR}/out/agg_target.nc","${BASE_DIR}/out/tas_weights.nc" "${BASE_DIR}/out/tasmax/TraCE_downscaled_1980_1990_climatology.nc" "${BASE_DIR}/out/tasmax/TraCE_downscaled_1980_1990_climatology_coarse.nc"
 cdo -s -b F32 -P 100 remap,"${BASE_DIR}/out/agg_target.nc","${BASE_DIR}/out/tas_weights.nc" "${BASE_DIR}/out/tasmin/TraCE_downscaled_1980_1990_climatology.nc" "${BASE_DIR}/out/tasmin/TraCE_downscaled_1980_1990_climatology_coarse.nc"
+

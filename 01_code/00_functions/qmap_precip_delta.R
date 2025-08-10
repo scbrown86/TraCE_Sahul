@@ -7,7 +7,8 @@ qmap_pr_delta <- function(chelsa_coarse_clim,
                           delta_method = "multiplicative",
                           resample_delta = "average",
                           eps = 1e-4,
-                          do_plot = FALSE) {
+                          do_plot = FALSE,
+                          ...) {
   # Check input types
   if (!inherits(chelsa_coarse_clim, "SpatRaster") || !inherits(trace_coarse_clim, "SpatRaster")) {
     stop("Both 'chelsa_coarse_clim' and 'trace_coarse_clim' must be SpatRaster objects.")
@@ -24,18 +25,22 @@ qmap_pr_delta <- function(chelsa_coarse_clim,
   match.arg(arg = resample_delta, choices = c("bilinear", "average", "cubic", "cubicspline", "median"))
   require(terra); require(qmap); require(pbapply)
 
-  # focal 3x3 if wanted?
-  if (smooth) {
-    warning("'trace_coarse_clim' smoothed with a 3x3 focal mean", call. = FALSE, immediate. = TRUE)
-    trace_coarse_clim <- focal(trace_coarse_clim, w = matrix(1, 3, 3),
-                               fun = mean, na.rm = TRUE)
+  # resample chelsa_coarse_clim to match TraCE clim
+  if (res(chelsa_coarse_clim)[1] != res(trace_coarse_clim)[1] || res(chelsa_coarse_clim)[2] != res(trace_coarse_clim)[2]) {
+    chelsa_coarse_clim <- resample(chelsa_coarse_clim, trace_coarse_clim, method = "average")
   }
 
-  # resample chelsa_coarse_clim to match TraCE clim
-  obs_coarse <- resample(chelsa_coarse_clim, trace_coarse_clim, method = "average")
+  # focal 3x3 if wanted?
+  if (smooth) {
+    warning("inputs smoothed with a 3x3 focal mean", call. = FALSE, immediate. = TRUE)
+    trace_coarse_clim <- focal(trace_coarse_clim, w = matrix(1, 3, 3),
+                               fun = mean, na.rm = TRUE)
+    chelsa_coarse_clim <- focal(chelsa_coarse_clim, w = matrix(1, 3, 3),
+                                fun = mean, na.rm = TRUE)
+  }
 
   # extract values to vectors
-  obs_coarse_vals <- as.vector(values(obs_coarse))
+  obs_coarse_vals <- as.vector(values(chelsa_coarse_clim))
   mod_coarse_vals <- as.vector(values(trace_coarse_clim))
 
   # Convert to data.frame
@@ -50,21 +55,28 @@ qmap_pr_delta <- function(chelsa_coarse_clim,
     obs = df$CHELSA,
     mod = df$downscaled,
     method = qm_method,
-    qstep = qm_qstep)
+    qstep = qm_qstep,
+    ...)
 
   # Function for applying QMAP to each pixel's time series
-  fun_qmap_stack <- function(x,...) {
-    return(doQmap(x, fit_qm))
-  }
+  fun_qmap_stack <- function(x) {
+    if (is.na(x)[1]) {
+      return(rep(NA, length(x)))
+    } else {
+      return(doQmap(x, fit_qm))
+    }
+  } 
 
   # apply the fitted q-map to the entire stack
   trace_qm <- terra::app(trace_coarse_clim, fun = fun_qmap_stack)
 
   # Generate a delta for each month from the qmapped stack
   delta_list <- pblapply(1:nlyr(trace_coarse_clim), function(i,...) {
-    obs_coarse_i  <- obs_coarse[[i]]
+    obs_coarse_i  <- chelsa_coarse_clim[[i]]
     mod_coarse_i  <- trace_coarse_clim[[i]]
-    mod_coarse_qm_i <- app(mod_coarse_i, fun = fun_qmap_stack)
+    mask_i <- ifel(is.na(mod_coarse_i), NA, 1)
+    mod_coarse_i <- ifel(is.na(mod_coarse_i), 0, mod_coarse_i)
+    mod_coarse_qm_i <- mask(app(mod_coarse_i, fun = fun_qmap_stack), mask_i)
     delta_i <- (obs_coarse_i + eps) / (mod_coarse_qm_i + eps)
     delta_high_i   <- resample(delta_i, high_res_template, method = resample_delta)
     return(delta_high_i)
