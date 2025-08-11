@@ -100,7 +100,7 @@ if (!all(file.exists(chelsa_climatologies))) {
   tas_avg <- rast("02_data/02_processed/CHELSA/CHELSA_tas_climatology.nc")
 }
 
-### RUN THIS IN A TERMINAL ###
+### RUN THIS IN A TERMINAL ####
 # conda activate nco_stable
 # BASE_DIR="/home/dafcluster4/Documents/GitHub/TraCE_Sahul/02_data/02_processed/CHELSA"
 # cdo -f nc sellonlatbox,105,161.25,-52.5,11.25 -const,1,global_0.5 "${BASE_DIR}/agg_target.nc"
@@ -131,14 +131,16 @@ if (!all(file.exists(chelsa_climatologies))) {
 # cdo -s -b F32 -P 100 remap,"${BASE_DIR}/agg_target.nc","${BASE_DIR}/tas_weights.nc" "${BASE_DIR}/CHELSA_tasmin_climatology_gdal.nc" "${BASE_DIR}/CHELSA_tasmin_climatology_coarse_remapcon.nc"
 
 # rm -rf "${BASE_DIR}/CHELSA_pr_climatology_gdal.nc" "${BASE_DIR}/CHELSA_tas_climatology_gdal.nc" "${BASE_DIR}/CHELSA_tasmax_climatology_gdal.nc" "${BASE_DIR}/CHELSA_tasmin_climatology_gdal.nc"
-###
 
-pr_avg <- rast("02_data/02_processed/CHELSA/CHELSA_pr_climatology_coarse_remapcon.nc")
-tmn_avg <- rast("02_data/02_processed/CHELSA/CHELSA_tasmin_climatology_coarse_remapcon.nc")
-tmx_avg <- rast("02_data/02_processed/CHELSA/CHELSA_tasmax_climatology_coarse_remapcon.nc")
-tas_avg <- rast("02_data/02_processed/CHELSA/CHELSA_tas_climatology_coarse_remapcon.nc")
+#### END ####
 
-plot(pr_avg, range = c(0, 500), fill_range = TRUE, fun = function() lines(land), col = hcl.colors(100, "YlGnBu", rev = TRUE))
+# pr_avg <- rast("02_data/02_processed/CHELSA/CHELSA_pr_climatology_coarse_remapcon.nc")
+# tmn_avg <- rast("02_data/02_processed/CHELSA/CHELSA_tasmin_climatology_coarse_remapcon.nc")
+# tmx_avg <- rast("02_data/02_processed/CHELSA/CHELSA_tasmax_climatology_coarse_remapcon.nc")
+# tas_avg <- rast("02_data/02_processed/CHELSA/CHELSA_tas_climatology_coarse_remapcon.nc")
+
+plot(pr_avg, range = c(0, 0.0003), fill_range = TRUE, fun = function() lines(land), col = hcl.colors(100, "YlGnBu", rev = TRUE))
+plot(app(pr_avg, sum), range = c(0, 0.002), fill_range = TRUE, fun = function() lines(land), col = hcl.colors(100, "YlGnBu", rev = TRUE))
 plot(tas_avg, range = c(5, 30), fill_range = TRUE, fun = function() lines(land), col = hcl.colors(100, "Spectral", rev = TRUE))
 # convert the CHELSA climatology data to 0.5 degree using b-splines
 source("01_code/00_functions/interpolate_bspline.R")
@@ -148,7 +150,7 @@ varnames(fine_clim[[2]]) <- "tas"
 varnames(fine_clim[[3]]) <- "tasmin"
 varnames(fine_clim[[4]]) <- "tasmax"
 # convert back to kg/m2/s
-fine_clim[[1]] <- fine_clim[[1]] / (86400 * c(31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31))
+## fine_clim[[1]] <- fine_clim[[1]] / (86400 * c(31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31))
 coarse_chelsa_clim <- lapply(fine_clim, interpolate_bspline,
   output_dir = "02_data/02_processed/CHELSA",
   bspline_ext = ext(105.0, 161.25, -52.5, 11.25),
@@ -160,14 +162,27 @@ coarse_chelsa_clim <- lapply(fine_clim, interpolate_bspline,
 names(coarse_chelsa_clim) <- c("pr", "tas", "tasmin", "tasmax")
 coarse_chelsa_clim
 
-plot(coarse_chelsa_clim$pr)
+plot(app(coarse_chelsa_clim$pr, sum)*86400*12, range = c(0, 1600), fill_range = TRUE, fun = function() lines(land), col = hcl.colors(100, "YlGnBu", rev = TRUE))
 
 #### TRACE ####
-# load in the downscaled Brown data
-brown <- list.files("/media/dafcluster4/storage/TraCE_1500_1990CE/1500_1990/out",
+# load in the raw trace data
+brown <- rast("/media/dafcluster4/storage/TraCE_Monthly/PRECC/trace.01-36.22000BP-1990CE.cam2.h0.PRECC.0000101-2204012.Sahul.concat.1500_1989CE.nc",
+              lyrs = 5761:5880) +
+          rast("/media/dafcluster4/storage/TraCE_Monthly/PRECL/trace.01-36.22000BP-1990CE.cam2.h0.PRECL.0000101-2204012.Sahul.concat.1500_1989CE.nc",
+              lyrs = 5761:5880)
+time(brown) <- seq(as.Date("1980-01-16"), by = "month", l = 120)
+brown <- tapp(brown, index = "month", fun = "mean")
+varnames(brown) <- "pr"
+units(brown) <- "kg/m2/s"
+brown
+
+brown_down <- list.files("/media/dafcluster4/storage/TraCE_1500_1990CE/1500_1990/out",
   recursive = TRUE, pattern = "1980_1990",
   full.names = TRUE)
-brown <- brown[grepl("coarse", brown)]
+brown_down <- brown_down[!grepl("coarse|pr", brown_down)]
+brown_down <- lapply(brown_down, rast)
+brown <- list(brown, brown_down[[1]], brown_down[[2]], brown_down[[3]])
+rm(brown_down)
 brown
 
 brown_climatologies <- c(
@@ -179,7 +194,11 @@ brown_climatologies <- c(
 if (!all(file.exists(brown_climatologies))) {
   # climatologies
   brown <- pblapply(brown, function(i) {
-    r <- rast(i)
+    if(!inherits(i, "SpatRaster")) {
+      r <- rast(i)
+    } else {
+      r <- i
+    }    
     time(r) <- seq(as.Date("1985-01-16"), by = "month", l = nlyr(r))
     r_u <- units(r)[1]
     r_v <- varnames(r[[1]])
@@ -203,7 +222,7 @@ if (!all(file.exists(brown_climatologies))) {
   })
   names(brown) <- c("pr", "tas", "tasmax", "tasmin")
   brown
-  # convert downscaled TraCE climatology to 0.5 degrees
+  # convert TraCE climatology to 0.5 degrees
   if (!dir.exists("02_data/02_processed/TRACE")) {
     dir.create("02_data/02_processed/TRACE", recursive = TRUE)
   }
@@ -280,9 +299,9 @@ rbind(
 delta_pr <-( coarse_chelsa_clim$pr + 1e-4) / (coarse_trace_clim$pr + 1e-4)
 delta_pr
 plot(delta_pr, fun = function() lines(land, col = "#000000"),
-     range = c(0.5, 2), fill_range = TRUE,
-     breaks = seq(0, 2, 0.25),
-     col = hcl.colors(8, "Spectral"))
+     range = c(0, 2), fill_range = TRUE,
+     breaks = seq(0, 2, by = 0.1),
+     col = hcl.colors(20, "Spectral"))
 # temperature delta
 delta_tas <- coarse_chelsa_clim$tas - coarse_trace_clim$tas
 delta_tas
@@ -309,7 +328,7 @@ deltas_fine <- lapply(deltas, interpolate_bspline,
   parallel_cores = 12,
   start_date = as.Date("1985-01-16"),
   outname_template = "delta_fine_%s_climatology.nc",
-  load_exist = FALSE,
+  load_exist = TRUE,
   delta = TRUE)
 names(deltas_fine) <- c("pr", "tas", "tasmin", "tasmax")
 deltas_fine

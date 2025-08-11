@@ -43,11 +43,11 @@ if [[ ! -f "$tas_weights" ]]; then
     cdo -P 100 gencon,"$targetgrid" "$src_tas_ann" "$tas_weights_ann"
 fi
 
-vars=(tas tasmax tasmin pr)
+vars=(pr tas tasmax tasmin)
 
 for var in "${vars[@]}"; do
     # sums for precipitation, means otherwise
-    if [[ $var == pr ]]; then
+    if [[ $var == "pr" ]]; then
         export CDO_REMAP_NORM="destarea"
         export REMAP_AREA_MIN=0.10
         op_dec="timselsum,120" # Centennial sums (120 steps = 10 decades =  1 century). 2155 decades = 215.5 centuries, last "century" is only 50 years.
@@ -112,3 +112,5 @@ for var in "${vars[@]}"; do
         cdo -s -b F32 -P 100 "$op_yr" "$in_yr" "$out_yr2"
     fi
 done
+
+# 

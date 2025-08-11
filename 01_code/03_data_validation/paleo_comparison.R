@@ -38,12 +38,12 @@ time_steps <- copy(time_steps)[Years <= 1499, ][, .(Months = 1:12, Years = ceili
 time_centennial <- unique(time_steps[["Years"]]) # central year of centennial step
 time_centennial <- c(time_centennial[1:215] - 50, time_centennial[216]-25)
 rm(years, months, nc); gc()
-
+time_centennial
 # read in our downscaled temporal aggregated data
-brown <- lapply(list.files(path = "/media/dafcluster4/storage/TraCE_22k_1990CE_CoarseSummary",
-                    pattern = "biascorr.nc",
+brown <- pblapply(list.files(path = "/media/dafcluster4/storage/TraCE_22k_1990CE_CoarseSummary",
+                    pattern = "noSpat.nc",
                     recursive = TRUE,
-                    full.names = TRUE), rast)
+                    full.names = TRUE), function(x) rast(x)*1)
 brown
 
 brown <- sds(
@@ -55,7 +55,7 @@ time(brown, tstep = "years") <- c(time_centennial, time_annual)
 brown
 
 plot(brown$pr[[c(1, 216, 217, 706)]], nc = 2,
-     fun = function() lines(land), range = c(0, 3000),
+     fun = function() lines(land), range = c(0, 3500),
      fill_range = TRUE, col = hcl.colors(100, "Roma"))
 
 plot(brown$tas[[c(1, 216, 217, 706)]], nc = 2,
@@ -64,12 +64,15 @@ plot(brown$tas[[c(1, 216, 217, 706)]], nc = 2,
 
 # Load in the aggregated Karger CHELSA TraCE data
 karger <- lapply(list.files(path = "/mnt/Data/CHELSA_Trace21/Sahul",
-                            pattern = "agg.nc",
-                            full.names = TRUE), rast)
+                            pattern = "noSpat.nc",
+                            full.names = TRUE)[1], function(x) rast(x)*1)
 names(karger) <- c("pr", "tasmax", "tasmin")
-
+plot(karger$pr[[c(1, 216, 217, 221)]], nc = 2,
+     fun = function() lines(land), range = c(0, 3500),
+     fill_range = TRUE, col = hcl.colors(100, "Roma"))
 # Mask the karger data by the nearest brown layer
 m <- match(seq(-20050, to = 1950, by = 100), time(brown$pr))
+length(m) == nlyr(karger$pr)
 karger$pr <- mask(karger$pr, brown$pr[[m]])
 karger$tasmax <- mask(karger$tasmax, brown$tasmax[[m]])
 karger$tasmin <- mask(karger$tasmin, brown$tasmin[[m]])
@@ -87,54 +90,71 @@ plot(karger$tas[[c(1, 216, 217, 221)]], nc = 2,
      fun = function() lines(land), range = c(5, 30),
      fill_range = TRUE, col = hcl.colors(100, "Temps"))
 
+plot(karger$pr[[c(1, 216, 217, 221)]]/brown$pr[[c(1, 216, 217, 667)]],
+     nc = 2, fun = function() lines(land), range = c(0, 3),
+     fill_range = TRUE, col = hcl.colors(100, "Roma"))
+
 # Load in Koppen climate zones
-koppen <- rast("02_data/01_inputs/koppen_zones_raster.tif")
-plot(koppen, fun = function() lines(aus))
-koppen <- project(koppen, brown$pr, method = "near")
-koppen <- mask(koppen, project(aus, koppen), touches = TRUE)
-has.colors(koppen)
-kd <- data.frame(id = 1:6,
-                 Koppen = c("Temperate", "Grassland", "Desert",
-                            "Subtropical", "Tropical", "Equatorial"))
-levels(koppen) <- kd
+koppen <- rast("02_data/01_inputs/koppen_sahul.tif")
 koppen
-plot(koppen, fun = function() lines(aus))
+koppen <- project(koppen, brown$pr[[1]], method = "mode")
+plot(koppen, fun = function() lines(land))
 
-# Make plots of conditons at various time-points
-time_array <- rcarbon::BCADtoBP(time(karger$pr)[1:201])/1000
-time_poi <- c(22, 16.8, 14.7, 14.3, 12.2, 8.4)
-time_array
-sapply(time_poi, function(i) {
-  x <- which.min(abs(time_array - i))
-  plot(c(karger$pr[[x]], brown$pr[[x]]),
-       range = c(0, 3000),
-       fill_range = TRUE, col = hcl.colors(100, "Roma"),
-       main = i, fun = function() lines(land))
-  plot(karger$pr[[x]]/brown$pr[[x]],
-       range = c(0, 5),
-       fill_range = TRUE, col = hcl.colors(100, "Spectral"),
-       main = paste0("Delta pr ", i), fun = function() lines(land))
-  })
-
-sapply(time_poi, function(i) {
-  x <- which.min(abs(time_array - i))
-  plot(c(karger$tas[[x]], brown$tas[[x]]),
-       main = i, fun = function() lines(land))
-})
-
-plot(c(karger$pr[[53]], brown$pr[[53]]),
-     range = c(100, 3000), fill_range = TRUE,
-     main = time_poi[2], fun = function() lines(land))
+# # Make plots of conditons at various time-points
+# time_array <- rcarbon::BCADtoBP(time(karger$pr)[1:201])/1000
+# time_poi <- c(22, 16.8, 14.7, 14.3, 12.2, 8.4)
+# time_array
+# sapply(time_poi, function(i) {
+#   x <- which.min(abs(time_array - i))
+#   plot(c(karger$pr[[x]], brown$pr[[x]]),
+#        range = c(0, 3500),
+#        fill_range = TRUE, col = hcl.colors(100, "Roma"),
+#        main = i, fun = function() lines(land))
+#   plot(karger$pr[[x]]/brown$pr[[x]],
+#        range = c(0, 3),
+#        fill_range = TRUE, col = hcl.colors(100, "Spectral"),
+#        main = paste0("Delta pr ", i), fun = function() lines(land))
+# })
+#
+# sapply(time_poi, function(i) {
+#   x <- which.min(abs(time_array - i))
+#   plot(c(karger$tas[[x]], brown$tas[[x]]),
+#        main = i, fun = function() lines(land))
+# })
+#
+# plot(c(karger$pr[[53]], brown$pr[[53]]),
+#      range = c(100, 3000), fill_range = TRUE,
+#      main = time_poi[2], fun = function() lines(land))
 
 # Areal averages over the whole Sahul region
-# Compute areal averages
-get_summary_stats <- function(r, timevec, varname) {
-  means <- global(r, "mean", na.rm = TRUE)[,1]
-  sds   <- global(r, "sd", na.rm = TRUE)[,1]
-  data.table(time = timevec, mean = means, sd = sds, variable = varname)
+# Compute areal averages across zones, or across the entire Sahul area
+get_summary_stats <- function(r, timevec, varname, koppen = NULL) {
+  if (is.null(koppen)) {
+    means <- global(r, "mean", na.rm = TRUE)[,1]
+    sds   <- global(r, "sd", na.rm = TRUE)[,1]
+    return(data.table(time = timevec, mean = means, sd = sds, variable = varname))
+  } else {
+    zones <- unique(values(koppen))  # extract unique values from the raster
+    zones <- zones[!is.na(zones)]     # remove NA if present
+    koppen_summary <- pblapply(zones, function(zone) {
+      zone_mask <- ifel(koppen == zone, koppen, NA)
+      r_masked  <- mask(r, zone_mask)
+      means <- global(r_masked, "mean", na.rm = TRUE)[,1]
+      sds   <- global(r_masked, "sd", na.rm = TRUE)[,1]
+      return(data.table(time = timevec, mean = means, sd = sds, variable = varname, zone = zone))
+    })
+    dt <- rbindlist(koppen_summary)
+    category_df <- cats(koppen)[[1]]
+    dt <- merge(dt, category_df, by.x = "zone", by.y = "ID", all.x = TRUE)
+    dt[, description := NULL]
+    setcolorder(dt, c("time", "mean", "sd", "variable", "zone", "code"))
+    return(dt)
+  }
 }
 
-brown_summary <- rbindlist(lapply(1:4, function(i) get_summary_stats(brown[[i]], time(brown$pr), names(brown)[i])))
+brown_summary <- rbindlist(lapply(1:4, function(i) {
+  get_summary_stats(brown[[i]], time(brown$pr), names(brown)[i], koppen)
+  }))
 brown_summary[, Model := "Brown"]
 karger_summary <- rbindlist(lapply(1:4, function(i) get_summary_stats(karger[[i]], time(karger$pr), names(karger)[i])))
 karger_summary[, Model := "Karger"]
