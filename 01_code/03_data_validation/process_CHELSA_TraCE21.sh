@@ -81,9 +81,7 @@ done
 # fi
 
 for var in "${variables[@]}"; do
-    # echo "Processing ${var}..."
-
-    # sums for precipitation, means otherwise
+   # sums for precipitation, means otherwise
     if [[ $var == "pr" ]]; then
         echo "Processing ${var}..."
         export CDO_REMAP_NORM=destarea

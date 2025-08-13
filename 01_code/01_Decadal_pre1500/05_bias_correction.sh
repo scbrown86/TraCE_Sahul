@@ -52,14 +52,14 @@ for chunk_dir in "${input_base}"/[0-9][0-9][0-9][0-9][0-9]_[0-9][0-9][0-9][0-9][
         biascorr_file="${var_dir}/CHELSA_${var}_${chunk_name}_concat_biascorr.nc"
         # concatenate chunk
         echo "  Concatenating ${var} in ${chunk_name}"
-        cdo -b F32 -P 100 -O unpack -cat $(ls -v1 "${var_dir}"/*.nc) "${concat_file}"
+        cdo -s -w -b F32 -P 100 -O unpack -cat $(ls -v1 "${var_dir}"/*.nc) "${concat_file}"
         # grab corresponding delta file
         delta_file=$(find "${delta_base}" -type f -name "delta_fine_delta_${var}_climatology_ncdf4.nc" | head -n 1)
+        echo "  Delta file for ${var}: ${delta_file}"
         if [[ ! -f "${delta_file}" ]]; then
             echo "  Delta file not found for ${var}; skipping"
             continue
         fi
-
         # temp files
         tmp_unpacked=$(mktemp --suffix "_${var}_unpacked.nc")
         tmp_delta=$(mktemp --suffix "_${var}_remap.nc")
@@ -67,16 +67,19 @@ for chunk_dir in "${input_base}"/[0-9][0-9][0-9][0-9][0-9]_[0-9][0-9][0-9][0-9][
         grid_desc=$(mktemp --suffix ".txt")
 
         # Unpack to remove scale/offset
-        cdo -P 100 -O -b F32 unpack "${concat_file}" "${tmp_unpacked}"
+        echo "  unpacking ${concat_file}"
+        cdo -s -w -P 100 -O -b F32 unpack "${concat_file}" "${tmp_unpacked}"
 
         # Choose remap method
         # Could/should probably use remapnn as there should be no actual regridding?
-        if [[ "${var}" == "pr" ]]; then
+        if [[ "${var}" == pr ]]; then
+            echo "  aligning delta for: $var"
             remap_method="-remapcon"
             # remap_method="-remapnn"
             export CDO_REMAP_NORM=destarea
             export REMAP_AREA_MIN=0.00
         else
+            echo "  aligning delta for: $var"
             remap_method="-remapcon"
             # remap_method="-remapnn"
             export CDO_REMAP_NORM=fracarea
@@ -84,13 +87,14 @@ for chunk_dir in "${input_base}"/[0-9][0-9][0-9][0-9][0-9]_[0-9][0-9][0-9][0-9][
         fi
 
         # remap delta to ensure that grids align
-        cdo griddes "${tmp_unpacked}" >"${grid_desc}"
+        cdo -s -w griddes "${tmp_unpacked}" >"${grid_desc}"
         cdo -s -w -P 100 unpack "${remap_method},${grid_desc}" "${delta_file}" "${tmp_delta}"
 
+        echo "  applying bias-correction for ${var}, to ${concat_file}"
         # Apply bias correction
-        if [[ "${var}" == "pr" ]]; then
+        if [[ "${var}" == pr ]]; then
             # needs a time axis to multiply by days per month
-            cdo -P 100 -b F32 \
+            cdo -s -w -P 100 -b F32 \
                 -setunit,'mm/month' \
                 -muldpm \
                 -settaxis,2000-01-16,,1month \
@@ -98,7 +102,7 @@ for chunk_dir in "${input_base}"/[0-9][0-9][0-9][0-9][0-9]_[0-9][0-9][0-9][0-9][
                 -mulc,86400 \
                 -mul "${tmp_unpacked}" "${tmp_delta}" "${tmp_biascorr}"
         else
-            cdo -P 100 -b F32 \
+            cdo -s -w -P 100 -b F32 \
                 -settaxis,2000-01-16,,1month \
                 -setcalendar,365_day \
                 -setunit,'deg_C' \
@@ -108,7 +112,7 @@ for chunk_dir in "${input_base}"/[0-9][0-9][0-9][0-9][0-9]_[0-9][0-9][0-9][0-9][
 
         # Don't store with compressed data
         echo "  Writing bias-corrected file: ${biascorr_file}"
-        cdo -O -b F32 unpack "${tmp_biascorr}" "${biascorr_file}"
+        cdo -s -w -O -b F32 unpack "${tmp_biascorr}" "${biascorr_file}"
 
         # Clean up temporary files
         rm -f "${tmp_unpacked}" "${tmp_delta}" "${tmp_biascorr}" "${grid_desc}"

@@ -42,11 +42,13 @@ for var in "${variables[@]}"; do
     # remap delta to ensure that grids align
     # Could/should probably use remapnn as there should be no actual regridding?
     if [[ $var == "pr" ]]; then
+        echo "aligning delta for: $var"
         remap_method="remapcon"
         # remap_method="remapnn"
         export CDO_REMAP_NORM=destarea
         export CDO_REMAP_MIN=0.00
     else
+        echo "aligning delta for: $var"
         # remap_method="remapnn"
         remap_method="remapbil"
         export CDO_REMAP_NORM=fracarea

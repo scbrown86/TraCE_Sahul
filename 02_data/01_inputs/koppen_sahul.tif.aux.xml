@@ -17,154 +17,189 @@
         <Type>2</Type>
         <Usage>0</Usage>
       </FieldDefn>
+      <FieldDefn index="3">
+        <Name>major_desc</Name>
+        <Type>2</Type>
+        <Usage>0</Usage>
+      </FieldDefn>
       <Row index="0">
         <F>1</F>
         <F>Af</F>
+        <F>Tropical, rainforest</F>
         <F>Tropical, rainforest</F>
       </Row>
       <Row index="1">
         <F>2</F>
         <F>Am</F>
         <F>Tropical, monsoon</F>
+        <F>Tropical, monsoon</F>
       </Row>
       <Row index="2">
         <F>3</F>
         <F>Aw</F>
+        <F>Tropical, savannah</F>
         <F>Tropical, savannah</F>
       </Row>
       <Row index="3">
         <F>4</F>
         <F>BWh</F>
         <F>Arid, desert, hot</F>
+        <F>Arid, desert</F>
       </Row>
       <Row index="4">
         <F>5</F>
         <F>BWk</F>
         <F>Arid, desert, cold</F>
+        <F>Arid, desert</F>
       </Row>
       <Row index="5">
         <F>6</F>
         <F>BSh</F>
         <F>Arid, steppe, hot</F>
+        <F>Arid, steppe</F>
       </Row>
       <Row index="6">
         <F>7</F>
         <F>BSk</F>
         <F>Arid, steppe, cold</F>
+        <F>Arid, steppe</F>
       </Row>
       <Row index="7">
         <F>8</F>
         <F>Csa</F>
         <F>Temperate, dry summer, hot summer</F>
+        <F>Temperate, dry summer</F>
       </Row>
       <Row index="8">
         <F>9</F>
         <F>Csb</F>
         <F>Temperate, dry summer, warm summer</F>
+        <F>Temperate, dry summer</F>
       </Row>
       <Row index="9">
         <F>10</F>
         <F>Csc</F>
         <F>Temperate, dry summer, cold summer</F>
+        <F>Temperate, dry summer</F>
       </Row>
       <Row index="10">
         <F>11</F>
         <F>Cwa</F>
         <F>Temperate, dry winter, hot summer</F>
+        <F>Temperate, dry winter</F>
       </Row>
       <Row index="11">
         <F>12</F>
         <F>Cwb</F>
         <F>Temperate, dry winter, warm summer</F>
+        <F>Temperate, dry winter</F>
       </Row>
       <Row index="12">
         <F>13</F>
         <F>Cwc</F>
         <F>Temperate, dry winter, cold summer</F>
+        <F>Temperate, dry winter</F>
       </Row>
       <Row index="13">
         <F>14</F>
         <F>Cfa</F>
         <F>Temperate, no dry season, hot summer</F>
+        <F>Temperate, no dry season</F>
       </Row>
       <Row index="14">
         <F>15</F>
         <F>Cfb</F>
         <F>Temperate, no dry season, warm summer</F>
+        <F>Temperate, no dry season</F>
       </Row>
       <Row index="15">
         <F>16</F>
         <F>Cfc</F>
         <F>Temperate, no dry season, cold summer</F>
+        <F>Temperate, no dry season</F>
       </Row>
       <Row index="16">
         <F>17</F>
         <F>Dsa</F>
         <F>Cold, dry summer, hot summer</F>
+        <F>Cold, dry summer</F>
       </Row>
       <Row index="17">
         <F>18</F>
         <F>Dsb</F>
         <F>Cold, dry summer, warm summer</F>
+        <F>Cold, dry summer</F>
       </Row>
       <Row index="18">
         <F>19</F>
         <F>Dsc</F>
         <F>Cold, dry summer, cold summer</F>
+        <F>Cold, dry summer</F>
       </Row>
       <Row index="19">
         <F>20</F>
         <F>Dsd</F>
         <F>Cold, dry summer, very cold winter</F>
+        <F>Cold, dry summer</F>
       </Row>
       <Row index="20">
         <F>21</F>
         <F>Dwa</F>
         <F>Cold, dry winter, hot summer</F>
+        <F>Cold, dry winter</F>
       </Row>
       <Row index="21">
         <F>22</F>
         <F>Dwb</F>
         <F>Cold, dry winter, warm summer</F>
+        <F>Cold, dry winter</F>
       </Row>
       <Row index="22">
         <F>23</F>
         <F>Dwc</F>
         <F>Cold, dry winter, cold summer</F>
+        <F>Cold, dry winter</F>
       </Row>
       <Row index="23">
         <F>24</F>
         <F>Dwd</F>
         <F>Cold, dry winter, very cold winter</F>
+        <F>Cold, dry winter</F>
       </Row>
       <Row index="24">
         <F>25</F>
         <F>Dfa</F>
         <F>Cold, no dry season, hot summer</F>
+        <F>Cold, no dry season</F>
       </Row>
       <Row index="25">
         <F>26</F>
         <F>Dfb</F>
         <F>Cold, no dry season, warm summer</F>
+        <F>Cold, no dry season</F>
       </Row>
       <Row index="26">
         <F>27</F>
         <F>Dfc</F>
         <F>Cold, no dry season, cold summer</F>
+        <F>Cold, no dry season</F>
       </Row>
       <Row index="27">
         <F>28</F>
         <F>Dfd</F>
         <F>Cold, no dry season, very cold winter</F>
+        <F>Cold, no dry season</F>
       </Row>
       <Row index="28">
         <F>29</F>
         <F>ET</F>
         <F>Polar, tundra</F>
+        <F>Polar, tundra</F>
       </Row>
       <Row index="29">
         <F>30</F>
         <F>EF</F>
+        <F>Polar, frost</F>
         <F>Polar, frost</F>
       </Row>
     </GDALRasterAttributeTable>
