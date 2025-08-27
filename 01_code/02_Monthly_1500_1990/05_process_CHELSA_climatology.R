@@ -100,9 +100,19 @@ if (!all(file.exists(chelsa_climatologies))) {
   tas_avg <- rast("02_data/02_processed/CHELSA/CHELSA_tas_climatology.nc")
 }
 
-plot(pr_avg, range = c(0, 0.0003), fill_range = TRUE, fun = function() lines(land), col = hcl.colors(100, "YlGnBu", rev = TRUE))
+# # mask the CHELSA tas data to land
+# chelsa_land_mask <- pr_avg[[1]]
+# chelsa_land_mask <- ifel(is.na(chelsa_land_mask), NA_integer_, 1L)
+# plot(chelsa_land_mask, fun = function() lines(land))
+
+# tmn_avg <- mask(tmn_avg, chelsa_land_mask)
+# tmx_avg <- mask(tmx_avg, chelsa_land_mask)
+# tas_avg <- mask(tas_avg, chelsa_land_mask)
+
+plot(pr_avg[[1]], range = c(0, 0.0003), fill_range = TRUE, fun = function() lines(land), col = hcl.colors(100, "YlGnBu", rev = TRUE))
+plot(tas_avg[[1]], range = c(5, 30), fill_range = TRUE, fun = function() lines(land), col = hcl.colors(100, "Roma", rev = TRUE))
 plot(app(pr_avg, sum), range = c(0, 0.002), fill_range = TRUE, fun = function() lines(land), col = hcl.colors(100, "YlGnBu", rev = TRUE))
-plot(tas_avg, range = c(5, 30), fill_range = TRUE, fun = function() lines(land), col = hcl.colors(100, "Spectral", rev = TRUE))
+plot(tmx_avg[[1]] - tas_avg[[1]])
 
 # convert the CHELSA climatology data to 0.5 degree using b-splines
 source("01_code/00_functions/interpolate_bspline.R")
@@ -135,9 +145,12 @@ brown <- list(rast("/media/dafcluster4/storage/TraCE_Monthly/PRECC/trace.01-36.2
                    lyrs = 5761:5880) +
                 rast("/media/dafcluster4/storage/TraCE_Monthly/PRECL/trace.01-36.22000BP-1990CE.cam2.h0.PRECL.0000101-2204012.Sahul.concat.1500_1989CE.nc",
                      lyrs = 5761:5880),
-              rast("/media/dafcluster4/storage/TraCE_1500_1990CE/1500_1990/out/tas/TraCE_downscaled_1980_1990_monthly_climatology.nc"),
-              rast("/media/dafcluster4/storage/TraCE_1500_1990CE/1500_1990/out/tasmax/TraCE_downscaled_1980_1990_monthly_climatology.nc"),
-              rast("/media/dafcluster4/storage/TraCE_1500_1990CE/1500_1990/out/tasmin/TraCE_downscaled_1980_1990_monthly_climatology.nc"))
+              rast("/media/dafcluster4/storage/TraCE_Monthly/TS/trace.01-36.22000BP-1990CE.cam2.h0.TS.0000101-2204012.Sahul.concat.1500_1989CE.nc",
+                   lyrs = 5761:5880)-273.15,
+              rast("/media/dafcluster4/storage/TraCE_Monthly/TSMX/trace.01-36.22000BP-1990CE.cam2.h0.TSMX.0000101-2204012.Sahul.concat.1500_1989CE.nc",
+                   lyrs = 5761:5880)-273.15,
+              rast("/media/dafcluster4/storage/TraCE_Monthly/TSMN/trace.01-36.22000BP-1990CE.cam2.h0.TSMN.0000101-2204012.Sahul.concat.1500_1989CE.nc",
+                   lyrs = 5761:5880)-273.15)
 brown <- pblapply(brown, function(i) {
   if (nlyr(i) != 12) {
     time(i) <- seq(as.Date("1980-01-16"), by = "month", l = 120)
@@ -219,7 +232,6 @@ plot(coarse_trace_clim$tasmax - coarse_trace_clim$tas)
 minmax(coarse_trace_clim$tasmax - coarse_trace_clim$tas)
 round(minmax(coarse_trace_clim$tasmin - coarse_trace_clim$tas), 2)
 
-
 #### DELTAS ####
 # create delta between the CHELSA and downscaled TraCE climatology
 rbind(
@@ -241,12 +253,12 @@ plot(delta_tas, fun = function() lines(land, col = "#FFFFFF"),
 delta_tasmin <- coarse_chelsa_clim$tasmin - coarse_trace_clim$tasmin
 delta_tasmin
 plot(delta_tasmin, fun = function() lines(land, col = "#FFFFFF"),
-     range = c(-5, 5), fill_range = TRUE, col = hcl.colors(100, "Spectral"))
+     range = c(-10, 10), fill_range = TRUE, col = hcl.colors(100, "Spectral"))
 
 delta_tasmax <- coarse_chelsa_clim$tasmax - coarse_trace_clim$tasmax
 delta_tasmax
 plot(delta_tasmax, fun = function() lines(land, col = "#FFFFFF"),
-     range = c(-5, 5), fill_range = TRUE, col = hcl.colors(100, "Spectral"))
+     range = c(-10, 10), fill_range = TRUE, col = hcl.colors(100, "Spectral"))
 
 # convert the delta back to 0.05 degrees using b-splines
 if (!dir.exists("02_data/02_processed/deltas")) {
@@ -265,10 +277,16 @@ deltas_fine <- lapply(deltas, interpolate_bspline,
 names(deltas_fine) <- c("pr", "tas", "tasmax", "tasmin")
 deltas_fine
 deltas_fine$pr*1
-plot(deltas_fine$pr)
-plot(deltas_fine$tas)
-plot(deltas_fine$tasmax)
-plot(deltas_fine$tasmin)
+plot(deltas_fine$pr, fun = function() lines(land, col = "#000000"),
+     range = c(0, 2), fill_range = TRUE,
+     breaks = seq(0, 2, by = 0.1),
+     col = hcl.colors(20, "Spectral"))
+plot(deltas_fine$tas, fun = function() lines(land, col = "#FFFFFF"),
+     range = c(-10, 10), fill_range = TRUE, col = hcl.colors(100, "Spectral"))
+plot(deltas_fine$tasmax, fun = function() lines(land, col = "#FFFFFF"),
+     range = c(-10, 10), fill_range = TRUE, col = hcl.colors(100, "Spectral"))
+plot(deltas_fine$tasmin, fun = function() lines(land, col = "#FFFFFF"),
+     range = c(-10, 10), fill_range = TRUE, col = hcl.colors(100, "Spectral"))
 
 # load in data for the first and last time step and check the effect of delta
 downscaled_22k <- list.files("/media/dafcluster4/storage/TraCE_22k_1500CE/chunk_out/00001_00012/out",
@@ -279,6 +297,10 @@ mask_22ka <- downscaled_22k$pr[[1]]
 mask_22ka <- ifel(is.na(mask_22ka), NA, 1)
 plot((downscaled_22k$pr * 86400 * c(31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)) * deltas_fine$pr)
 plot((downscaled_22k$tas-273.15) + deltas_fine$tas)
+par(mfrow = c(2, 2))
+plot(downscaled_22k$tasmax[[9]]-273.15, range = c(5, 30), fill_range = TRUE)
+plot(mask(deltas_fine$tasmax[[9]], mask_22ka))
+plot(mask(deltas_fine$tasmax[[9]], mask_22ka) + (downscaled_22k$tasmax[[9]]-273.15), range = c(5, 30), fill_range = TRUE)
 minmax((downscaled_22k$tasmax + deltas_fine$tasmax) - (downscaled_22k$tas + deltas_fine$tas))
 minmax((downscaled_22k$tasmin + deltas_fine$tasmin) - (downscaled_22k$tas + deltas_fine$tas))
 minmax((downscaled_22k$tasmax[[1]] + deltas_fine$tasmax[[1]]) - (downscaled_22k$tasmin[[1]] + deltas_fine$tasmin[[1]]))
@@ -286,7 +308,7 @@ minmax((downscaled_22k$tasmax[[1]] + deltas_fine$tasmax[[1]]) - (downscaled_22k$
 # some areas where max is < min
 brown_22k <- ((downscaled_22k$tasmax - 273.15) + deltas_fine$tasmax) - ((downscaled_22k$tasmin - 273.15) + deltas_fine$tasmin)
 plot(brown_22k, main = paste(month.abb, " max - min temp"),
-     range = c(-8, 8), fill_range = TRUE, col = hcl.colors(20, "Spectral"), 
+     range = c(-10, 10), fill_range = TRUE, col = hcl.colors(20, "Spectral"), 
      fun = function() lines(land))
 
 # Karger et al have the same issue! Max is lower than the min after bias correction

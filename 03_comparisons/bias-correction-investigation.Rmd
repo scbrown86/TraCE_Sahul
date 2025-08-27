@@ -1,0 +1,642 @@
+---
+title: "TraCE-21ka bias correction checks"
+date: "2025-08-20"
+output: 
+  html_document: 
+    highlight: tango
+    theme: cosmo
+    fig_width: 12
+    fig_height: 12
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      cache = TRUE)
+library(terra)
+library(pbapply)
+library(qgisprocess)
+library(data.table)
+
+knitr::opts_chunk$set(cache = TRUE, fig.align = 'center', 
+                      fig.width = 12, fig.height = 12)
+
+# source a function for using SAGA through QGIS to do the
+# multilevel b spline interpolation
+source("01_code/00_functions/interpolate_bspline.R")
+
+# template raster at 0.05° res to make sure that
+# anomalies etc. match the extent and res of our outputs
+rast_template <- rast(res = 0.05, crs = "EPSG:4326", vals = 0L,
+                      extent = ext(105, 161.25, -52.5, 11.25))
+
+land <- vect(rnaturalearthhires::countries10)
+land <- crop(land, ext(105, 161.25, -52.5, 11.25))
+land <- aggregate(land)
+```
+
+# Bias correction issues with downscaled TraCE-21ka data
+
+I've noticed some issues with the temperatures when using raw (3.75°) TraCE-21 data to calculate anomalies between CHELSA v1.2 and TraCE-21. These anomalies are used to correct our downscaled TraCE-21ka data (hereafter `downTrace`). According to Karger *et al* they use the 3.75° TraCE-21 data, downscaled to 0.5°, and calculate biases against CHELSA v1.2 (nominally \~0.0083° [\~1km]) data upscaled to 0.5°. Both datasets are regridded using multilevel b-spline interpolation. Simple delta anomalies are then calculated as `anomaly = Chelsa - Trace`, downscaled again to 0.0083° (\~1km), and then added back to their downscaled climate data to bias correct it. Our approach currently uses the exact same methodology, except we only downscale the anomalies to 0.05° (\~5km) as this is the resolution of our output data.
+
+An overview of our current processing steps are:
+
+-   Downscale TraCE-21 data to 0.05° using the `CHELSA_paleo` python package (`downTrace`)
+-   Downscale "raw" TraCE-21 data (3.75°) to 0.5° using multilevel bspline interpolation (`trace_fine`)
+-   Upscale CHELSA v1.2 data (\~0.0083°) to 0.5° using multilevel bspline interpolation (`chelsa_coarse`)
+-   Calculate an anomaly at 0.5° between the two as `anomaly = chelsa_coarse - trace_fine`
+-   Downscale the anomaly to 0.05° using multilevel bspline interpolation (`anom_fine`)
+-   Correct our `downTrace` data using `anom_fine` as `downTrace_corrected = downTrace + anom_fine`
+
+There are issues with regards to minimum and maximum temperatures in this current workflow.
+
+The most outstanding issue is that this simple additive delta correction, results in some areas where the corrected maximum temperatures are less than the corrected minimum temperatures. This is an artefact of downscaling the 3.75° TraCE-21 data to 0.5°. This has been confirmed by checking the original 3.75° TraCE-21 data and confirming there are no grid-cells where T~max~ is ever less than T~min~.
+
+Currently, TraCE-21 data is a continuous grid with land surface temperature and sea-surface temperature on the same grid. See the plot below.
+
+```{r plot-Trace, echo = FALSE, fig.height=6, fig.width=12}
+quick_trace <- rast("/media/dafcluster4/storage/TraCE_Monthly/TSMX/trace.01-36.22000BP-1990CE.cam2.h0.TSMX.0000101-2204012.Sahul.concat.1500_1989CE.nc",
+                    lyrs = 5880)
+quick_trace_fine <- rast("02_data/02_processed/TRACE/TraCE_coarse_tasmax_climatology.nc", lyrs = 12)
+par(mfrow = c(1, 2))
+plot(quick_trace-273.15, fun = function() lines(land), range = c(5, 40), fill_range = TRUE,
+      main =  "TraCE-21ka (3.75°)",
+     col = hcl.colors(100, "spectral", rev = TRUE))
+plot(quick_trace_fine, fun = function() lines(land), range = c(5, 40), fill_range = TRUE,
+      main =  "TraCE-21ka (0.5°)",
+     col = hcl.colors(100, "spectral", rev = TRUE))
+rm(quick_trace)
+```
+
+The CHELSA v1.2 dataset is the same, but is already a very fine grid. See the plot below.
+
+```{r plot-CHELSA, echo = FALSE, fig.height=6, fig.width=12}
+quick_chelsa <- rast("02_data/02_processed/CHELSA/CHELSA_tasmax_1989_V.1.2.tif", lyrs = 12)
+quick_chelsa_coarse <- rast("02_data/02_processed/CHELSA/CHELSA_coarse_tasmax_climatology.nc", lyrs = 12)
+par(mfrow = c(1, 2))
+plot(quick_chelsa, fun = function() lines(land), range = c(5, 40), fill_range = TRUE,
+     main =  "CHELSA v1.2 (0.0083°)",
+     col = hcl.colors(100, "spectral", rev = TRUE))
+plot(quick_chelsa_coarse, fun = function() lines(land), range = c(5, 40), fill_range = TRUE,
+     main =  "CHELSA v1.2 (0.5°)",
+     col = hcl.colors(100, "spectral", rev = TRUE))
+rm(quick_chelsa)
+```
+
+This interpolation issue, then causes big anomalies between the two datasets
+
+```{r plot-quick-delta, fig.height=6, fig.width=6, fig.align='center', echo = FALSE}
+plot(quick_chelsa_coarse - quick_trace_fine, fun = function() lines(land), 
+     range = c(-20, 5), fill_range = TRUE,
+     main =  "CHELSA - TraCE",
+     col = hcl.colors(100, "Spectral", rev = TRUE))
+```
+
+The issues are caused by differences in the effect of upscaling/downscaling climate data.
+
+For example, going from coarse (3.75°) to fine (0.5°):
+
+-   Coarse data (3.75°) already mixes land and sea temperatures in coastal cells.
+
+-   Downscaling with multilevel B-splines will smooth these mixed values, producing unrealistic temperatures over land and ocean:
+
+    -   Land values near the coast will be too cool (leading to large +ve bias')
+
+    -   Ocean values near the coast will be too warm (leading to large -ve bias')
+
+-   The finer 0.5° grid will inherit these artefacts, because the algorithm has no information about the underlying land/sea distribution.
+
+Conversely, going from fine (0.0083°) to coarse (0.5°):
+
+-   High-resolution data (0.0083°) already contains very fine land/sea temperature contrasts.
+
+-   Upscaling to 0.5° necessarily aggregates multiple high-resolution pixels into each coarse cell:
+
+    -   Land temperatures are averaged with neighboring land and possibly coastal ocean pixels.
+
+    -   Ocean temperatures are averaged with neighboring pixels too.
+
+-   Even with multilevel B-spline interpolation smoothing:
+
+    -   Sharp coastal gradients are partially retained in the aggregated 0.5° grid.
+
+    -   Extremes are dampened, but coastal contrasts are still more pronounced than in downscaled coarse data.
+
+-   The resulting 0.5° grid preserves some fine-scale structure (i.e. constrasts between land/sea), but the aggregation introduces subtle smoothing artifacts:
+
+    -   Peaks and valleys in land temperature are slightly reduced.
+
+    -   Localized warm or cool spots *may* be muted.
+
+Essentially, the transition between land/sea is more "realistic" when upscaling the CHELSA v1.2 data, than it is when downscaling the TraCE-21 data.
+
+My proposed approach to minimise these issues is to make a small modification to our workflow:
+
+-   Downscale TraCE-21 data to 0.05° using the `CHELSA_paleo` python package (`downTrace`). This data is masked to land only.
+-   Create a land only mask at 0.05°
+-   Compare with existing mask from Karger et al.
+-   Upscale the downTrace data (0.05°) to 0.5° using multilevel bspline interpolation (`trace_coarse`).
+-   Mask the CHELSA v1.2 data (\~0.0083°) using either the Karger mask or the downscaled `downTrace` mask.
+-   Upscale the masked CHELSA data to 0.5° using multilevel bspline interpolation (`chelsa_coarse`).
+-   Calculate an anomaly at 0.5° between the two as `anomaly = chelsa_coarse - trace_coarse`
+-   Downscale the anomaly to 0.05° using bilinear (or bicubic) interpolation (`anom_fine`)
+-   Correct our `downTrace` data using `anom_fine` as `downTrace_corrected = downTrace + anom_fine`
+-   Use the corrected `downTrace` data to calculate a new t~max~ and t~min~ using the same approach as the CRU dataset
+
+Below I will run through this modified workflow.
+
+## Load libraries
+
+Load in the libraries and a custom function for performing the multilevel b-spline interpolation.
+
+```{r load-libs, eval = FALSE}
+library(terra)
+library(pbapply)
+library(qgisprocess)
+
+# source a function for using SAGA through QGIS to do the
+# multilevel b spline interpolation
+source("01_code/00_functions/interpolate_bspline.R")
+
+# template raster at 0.05° res to make sure that
+# anomalies etc. match the extent and res of our outputs
+rast_template <- rast(res = 0.05, crs = "EPSG:4326", vals = 0L,
+                      extent = ext(105, 161.25, -52.5, 11.25))
+```
+
+## Load downTrace data
+
+Here we load in our downscaled TraCE-21 data. Only load in the monthly data for 1980-1989.
+
+We also create the mask from our downscaled data, downscale it to 0.0083°, and compare it to the masks used by Karger et al.
+
+```{r load-downTrace, fig.width=6, fig.height=6}
+# This data has been extracted using CDO
+downTrace_max <- rast("/media/dafcluster4/storage/TraCE_1500_1990CE/1500_1990/out/tasmax/TraCE_downscaled_1980_1990_monthly.nc")
+downTrace_min <- rast("/media/dafcluster4/storage/TraCE_1500_1990CE/1500_1990/out/tasmin/TraCE_downscaled_1980_1990_monthly.nc")
+time(downTrace_max) <- time(downTrace_min) <- seq(as.Date("1980-01-16"), by = "month", l = nlyr(downTrace_max))
+downTrace_max
+
+# Make a mask
+downTrace_mask <- downTrace_max[[120]]
+downTrace_mask <- ifel(is.na(downTrace_mask), NA_integer_, 1L)
+plot(downTrace_mask)
+
+# Load in an existing mask from Karger et al.
+kargerMask <- rast("/mnt/Data/CHELSA_Trace21/Input/CHELSA_TraCE21k_dem_20_V1.0.tif",
+                   win = ext(downTrace_mask), snap = "out")
+kargerMask <- ifel(is.na(kargerMask), NA_integer_, 1L)
+
+# fine downTrace_mask
+downTrace_maskF <- project(downTrace_mask, kargerMask, method = "mode")
+downTrace_maskF
+
+# Any cells that don't overlap?
+# if all cells == 2 == complete overlap between masks
+app(downTrace_maskF + kargerMask, sum, na.rm = FALSE)
+
+plot(downTrace_maskF + kargerMask, fun = function() lines(land))
+```
+
+## upscale downTrace data
+
+Here we upscale the downTrace data from 0.05° to 0.5° using multilevel b-spline interpolation. This data is originally land only, but will be "interpolated" over the Sahul region as part of the interpolation algorithm.
+
+```{r upscale-downTrace}
+# make a temp dir for storing outputs
+if (!dir.exists("03_comparisons/bc_investigations/")) {
+  dir.create("03_comparisons/bc_investigations/", recursive = TRUE)
+}
+
+# Create the traceCoarse data (climatological average)
+downTrace <- lapply(list(downTrace_max, downTrace_min), function(x) {
+  i <- tapp(x, index = "month", fun = mean)
+  units(i) <- "deg_C"
+  time(i) <- seq(as.Date("1985-01-16"), by = "month", l = 12)
+  i
+})
+names(downTrace) <- c("tasmax", "tasmin")
+varnames(downTrace[[1]]) <- "tasmax"
+varnames(downTrace[[2]]) <- "tasmin"
+downTrace
+
+coarse_trace_clim <- lapply(downTrace, interpolate_bspline,
+    output_dir = "03_comparisons/bc_investigations",
+    bspline_ext = ext(105.0, 161.25, -52.5, 11.25),
+    target_size = 0.5,
+    parallel_cores = 12,
+    start_date = as.Date("1985-01-16"),
+    outname_template = "downTrace_coarse_%s_climatology.nc",
+    load_exist = TRUE)
+
+coarse_trace_clim
+
+```
+
+## downscale CHELSA v1.2 data
+
+Here we downscale the CHELSA v1.2 data from 0.0083° to 0.5° using multilevel b-spline interpolation. This data is originally land and sea temperature data, but we will mask it to land only before applying the interpolation algorithm.
+
+```{r downscale-CHELSA}
+# Data has already been stacked and processed to monthly averages
+chelsa_max <- rast("02_data/02_processed/CHELSA/CHELSA_tasmax_climatology.nc")
+chelsa_min <- rast("02_data/02_processed/CHELSA/CHELSA_tasmin_climatology.nc")
+
+# apply mask
+chelsa_max <- mask(chelsa_max, kargerMask)
+chelsa_min <- mask(chelsa_min, kargerMask)
+
+coarse_chelsa_clim <- lapply(list(chelsa_max, chelsa_min), interpolate_bspline,
+    output_dir = "03_comparisons/bc_investigations",
+    bspline_ext = ext(105.0, 161.25, -52.5, 11.25),
+    target_size = 0.5,
+    parallel_cores = 12,
+    start_date = as.Date("1985-01-16"),
+    outname_template = "chelsa_coarse_%s_climatology.nc",
+    load_exist = TRUE)
+names(coarse_chelsa_clim) <- c("tasmax", "tasmin")
+coarse_chelsa_clim
+
+```
+
+Here is a quick comparison plot of the upscaled data
+
+```{r plot-upscaled, fig.width=12, fig.height=6, echo = FALSE}
+plot(c(coarse_trace_clim[[1]][[12]], coarse_chelsa_clim[[1]][[12]]),
+     fun = function() lines(land), range = c(5, 40), fill_range = TRUE,
+     main = c("u/s downTrace\n(Dec tmax) (0.5°)", "CHELSA v1.2\n(Dec tmax) (0.5°)"),
+     col = hcl.colors(100, "spectral", rev = TRUE))
+```
+
+And here is a quick comparison of the anomaly.
+
+```{r plot-anom-upscale, fig.height=6, fig.width=12, echo = FALSE}
+par(mfrow = c(1, 2))
+plot(quick_chelsa_coarse - quick_trace_fine, fun = function() lines(land), 
+     range = c(-20, 5), fill_range = TRUE,
+     main =  "CHELSA - TraCE\n(d/s from 3.75°)",
+     col = hcl.colors(100, "spectral", rev = TRUE))
+plot(coarse_chelsa_clim[[1]][[12]] - coarse_trace_clim[[1]][[12]], 
+     fun = function() lines(land), 
+     range = c(-20, 5), fill_range = TRUE,
+     main =  "CHELSA - TraCE\n(u/s from 0.05°)",
+     col = hcl.colors(100, "spectral", rev = TRUE))
+par(mfrow = c(1, 1))
+```
+
+Based on this plot, we'll use the 0.05° data that has been upscaled to 0.5° to create the anomalies.
+
+## Create anomalies
+
+Here we will make the anomalies we need to bias correct the temperature data. We need to create an additive bias for mean temperature, and a multiplicative bias for diurnal temperature range.
+
+```{r make-anom}
+# mean air temperature for downTrace data
+downTrace_mean <- 0.5 * (coarse_trace_clim$tasmax + coarse_trace_clim$tasmin)
+
+# mean air temperature for CHELSA v1.2 data
+chelsa_mean <- 0.5 * (coarse_chelsa_clim$tasmax + coarse_chelsa_clim$tasmin)
+
+# Additive bias for mean temperature
+delta_tmean <- chelsa_mean - downTrace_mean
+varnames(delta_tmean) <- "tas"
+longnames(delta_tmean) <- "mean air temperature delta"
+units(delta_tmean) <- "deg_C"
+delta_tmean
+
+plot(delta_tmean, fun = function() lines(land),
+     range = c(-10, 10), fill_range = TRUE,
+     col = hcl.colors(100, "spectral", rev = TRUE))
+
+# downTrace diurnal temperature range
+downTrace_dtr <- coarse_trace_clim$tasmax - coarse_trace_clim$tasmin
+
+# fix any negative DTR values
+## replace with 0.05
+dtr_correction <- min(global(downTrace_dtr, min)) - 5e-2
+downTrace_dtr <- ifel(downTrace_dtr < 0, downTrace_dtr - dtr_correction, downTrace_dtr)
+downTrace_dtr
+
+# CHELSA v1.2 dtr
+chelsa_dtr <- coarse_chelsa_clim$tasmax - coarse_chelsa_clim$tasmin
+
+# fix any negative DTR values
+dtr_correction <- min(global(chelsa_dtr, min)) - 5e-2
+chelsa_dtr <- ifel(chelsa_dtr < 0, chelsa_dtr - dtr_correction, chelsa_dtr)
+chelsa_dtr
+
+## Multiplicative bias for DTR (avoid division by zero)
+delta_dtr <- chelsa_dtr / downTrace_dtr
+delta_dtr[!is.finite(delta_dtr)] <- 1 # if delta_dtr is infinite, set ratio = 1
+varnames(delta_dtr) <- "dtr"
+longnames(delta_dtr) <- "diurnal temperature range delta"
+units(delta_dtr) <- "deg_C"
+delta_dtr
+
+plot(delta_dtr, range = c(0, 3), fill_range = TRUE, 
+     col = hcl.colors(100, "Spectral", rev = TRUE),
+     fun = function() lines(land, col = "white"))
+```
+
+## Downscale anomalies
+
+Now that the deltas for average air temperature and diurnal temperature range have been made, we need to downscale them to 0.05°. Karger et al use multilevel b-spline interpolation for this, but this can cause some of the values to become negative. Here we're simply going to use bilinear interpolation. These anomalies can then be used to recreate bias corrected temperatures for our `downTrace` data.
+
+```{r downscale-anom}
+# downscale with bilinear. Make sure we're creating a delta!
+fine_anoms <- lapply(list(delta_tmean, delta_dtr), interpolate_bspline,
+    output_dir = "03_comparisons/bc_investigations",
+    bspline_ext = ext(105.0, 161.25, -52.5, 11.25),
+    target_size = 0.05,
+    parallel_cores = 12,
+    start_date = as.Date("1985-01-16"),
+    outname_template = "anom_fine_%s_climatology.nc",
+    algo = "bilinear", ## <
+    delta = TRUE, ## <
+    load_exist = TRUE)
+names(fine_anoms) <- c("tas", "dtr")
+fine_anoms
+
+plot(fine_anoms$tas, fun = function() lines(land),
+     range = c(-10, 10), fill_range = TRUE,
+     col = hcl.colors(100, "spectral", rev = TRUE))
+
+plot(fine_anoms$dtr, range = c(0, 3), fill_range = TRUE, 
+     col = hcl.colors(100, "spectral", rev = TRUE),
+     fun = function() lines(land))
+```
+
+## Bias correct the downTrace data
+
+Now that we have the anomalies on the same 0.05° grid that our `downTrace` data exists on, we can bias correct the data using a different approach to the typical `corrected = data + anom` approach. Here we first need to correct the mean air temperature using a simple additive approach, then correct the diurnal temperature range, and then calculate a new T~max~ and T~min~ using the corrected mean air temperature and diurnal temperatures. This is how the CRU datasets are calculated.
+
+```{r correct-downTrace-1980-1989}
+# correct the mean temperature first
+## calculate average from max and min, then add anomaly
+downTrace_mean_corr <- (0.5 * (downTrace_max + downTrace_min)) + fine_anoms$tas
+
+# what do the corrected monthly avg temps look like?
+plot(tapp(downTrace_mean_corr, "month", mean), 
+     range = c(5, 30), fill_range = TRUE,
+     col = hcl.colors(100, "spectral", rev = TRUE),
+     fun = function() lines(land))
+
+# correct the DTR
+## calculate the DTR, then multiply by the anomaly
+## need to fix any -ve dtr first
+downTrace_dtr <- (downTrace_max - downTrace_min)
+# if negative dtr, make 0.01 dtr
+downTrace_dtr <- ifel(downTrace_dtr < 0, 0.01, downTrace_dtr)
+
+# multiply by the correction
+downTrace_dtr_corr <- downTrace_dtr * fine_anoms$dtr
+
+# Quick check for unusually high dtr values
+high_dtr <- setorder(setDT(as.data.frame(where.max(downTrace_dtr_corr))), -value)
+hist(high_dtr[["value"]])
+abline(v = quantile(high_dtr[["value"]], c(0.25, 0.5, 0.75, 0.90)))
+
+# plot of location of the highest values
+# "high" is anything over 35°C
+high_locs <- copy(high_dtr)[, .(value = max(value)), by = c("cell", "layer")][value >= 35, ]
+high_locs <- vect(xyFromCell(downTrace_dtr_corr, high_locs[["cell"]]), 
+                  crs = "EPSG:4326")
+plot(app(downTrace_dtr_corr, max),
+     breaks = c(-Inf, 35, Inf),
+     col = c("#4daf4a", "#e41a1c"),
+     fun = function() {
+       lines(land)
+       points(high_locs)
+     },
+     ext = c(120, 150, -16.5, 0),
+     buffer = TRUE)
+
+# What are the DTR correction factors at those locations?
+extract(fine_anoms$dtr, high_locs) 
+
+# very high values in May (layer 5) and August (layer 8)
+hist(as.vector(values(fine_anoms$dtr[[c(5, 8)]])))
+abline(v = quantile(as.vector(values(fine_anoms$dtr[[c(5, 8)]])), 
+                    c(0.25, 0.5, 0.75, 0.95)))
+
+# what are the percentiles for those layers
+quantile(as.vector(values(fine_anoms$dtr[[5]])), c(0.25, 0.5, 0.75, 0.95, 0.99))
+quantile(as.vector(values(fine_anoms$dtr[[8]])), c(0.25, 0.5, 0.75, 0.95, 0.99))
+
+# replace extreme values with 99th percentile
+dtr5_99 <- quantile(as.vector(values(fine_anoms$dtr[[5]])), 0.99)
+dtr8_99 <- quantile(as.vector(values(fine_anoms$dtr[[8]])), 0.99)
+fine_anoms$dtr[[5]] <- ifel(fine_anoms$dtr[[5]] > dtr5_99, dtr5_99, fine_anoms$dtr[[5]])
+fine_anoms$dtr[[8]] <- ifel(fine_anoms$dtr[[8]] > dtr5_99, dtr5_99, fine_anoms$dtr[[8]])
+
+# plot the fine scale DTR again
+plot(fine_anoms$dtr, range = c(0, 3), fill_range = TRUE, 
+     col = hcl.colors(100, "spectral", rev = TRUE),
+     fun = function() lines(land))
+
+# multiply by the correction (again)
+downTrace_dtr_corr <- downTrace_dtr * fine_anoms$dtr
+
+# what does the corrected monthly DTR look like?
+plot(tapp(downTrace_dtr_corr, "month", mean), 
+     range = c(0, 16), fill_range = TRUE, 
+     col = hcl.colors(100, "spectral", rev = TRUE),
+     fun = function() lines(land))
+
+# Now reconstruct the downscaled max and min from the bias corrected mean and DTR
+## tmax = avg tas + 0.5*dtr
+downTrace_tmax_corr <- round(downTrace_mean_corr + (0.5 * downTrace_dtr_corr), 2)
+varnames(downTrace_tmax_corr) <- "tasmax"
+longnames(downTrace_tmax_corr) <- "maximum air temperature"
+units(downTrace_tmax_corr) <- "deg_C"
+time(downTrace_tmax_corr) <- seq(as.Date("1980-01-16"), by = "month", l = nlyr(downTrace_tmax_corr))
+summary(global(downTrace_tmax_corr, max, na.rm = TRUE))
+downTrace_tmax_corr
+
+# what do the corrected monthly avg max temps look like?
+plot(tapp(downTrace_tmax_corr, "month", mean),
+     range = c(5, 35), fill_range = TRUE,
+     main = paste0(month.abb, " corrected tasmax"),
+     col = hcl.colors(100, "spectral", rev = TRUE),
+     fun = function() lines(land))
+
+## tmin = avg tas - 0.5*dtr
+downTrace_tmin_corr <- round(downTrace_mean_corr - (0.5 * downTrace_dtr_corr), 2)
+varnames(downTrace_tmin_corr) <- "tasmin"
+longnames(downTrace_tmin_corr) <- "minimum air temperature"
+units(downTrace_tmin_corr) <- "deg_C"
+time(downTrace_tmin_corr) <- seq(as.Date("1980-01-16"), by = "month", l = nlyr(downTrace_tmin_corr))
+summary(global(downTrace_tmin_corr, min, na.rm = TRUE))
+downTrace_tmin_corr
+
+# what do the corrected monthly avg min temps look like?
+plot(tapp(downTrace_tmin_corr, "month", mean),
+     range = c(5, 35), fill_range = TRUE,
+     main = paste0(month.abb, " corrected tasmin"),
+     col = hcl.colors(100, "spectral", rev = TRUE),
+     fun = function() lines(land))
+```
+
+## Temperature check
+
+Now that the temperatures have been bias corrected for the period 1980-1989, we need to do a quick sanity check to see if t~max~ is ever less than t~min~
+
+```{r corr-temp-check, fig.width=6, fig.height=6}
+# How often is tmax < tmin for the corrected temperatures
+dtr_temp_anoms <- app(downTrace_tmax_corr < downTrace_tmin_corr, sum)
+dtr_temp_anoms <- round((dtr_temp_anoms / nlyr(downTrace_tmax_corr)) * 100, 2)
+dtr_temp_anoms
+
+plot(dtr_temp_anoms, fun = function() lines(land))
+```
+
+## Paleo correction
+
+Now we need to check how the method performs at 21k BP. Here we load in the data for the first decade (\~22ka BP) from our `downTrace` data, and apply the same bias correction methods. We use the anomalies from the climatology period (1980-1989) which we calculated above.
+
+```{r paleo-corr-check}
+# Lets look at what happens at 22ka BP
+## all in Kelvin so subtract 273.15
+trace_22tmax <- rast(gtools::mixedsort(list.files("/media/dafcluster4/storage/TraCE_22k_1500CE/chunk_out/00001_00012/out/tasmax/",
+                                full.names = TRUE)))-273.15
+trace_22tmin <- rast(gtools::mixedsort(list.files("/media/dafcluster4/storage/TraCE_22k_1500CE/chunk_out/00001_00012/out/tasmin/",
+                                full.names = TRUE)))-273.15
+# calculate a bias corrected mean temperature
+trace_22tas_corr <- (0.5 * (trace_22tmax + trace_22tmin)) + fine_anoms$tas
+
+# calculate a bias corrected dtr
+trace_22dtr <- (trace_22tmax - trace_22tmin)
+trace_22dtr <- ifel(trace_22dtr < 0, 0.01, trace_22dtr)
+
+# multiply by the correction
+trace_22dtr_corr <- trace_22dtr * fine_anoms$dtr
+
+## tmax = avg tas + 0.5*dtr
+trace_22tmax_corr <- round(trace_22tas_corr + (0.5 * trace_22dtr_corr), 2)
+varnames(trace_22tmax_corr) <- "tasmax"
+longnames(trace_22tmax_corr) <- "maximum air temperature"
+units(trace_22tmax_corr) <- "deg_C"
+time(trace_22tmax_corr, tstep = "months") <- 1:12
+trace_22tmax_corr
+
+# what do the corrected monthly avg max temps look like?
+plot(trace_22tmax_corr,
+     range = c(5, 35), fill_range = TRUE,
+     main = paste0(month.abb, " corrected tasmax"),
+     col = hcl.colors(100, "spectral", rev = TRUE),
+     fun = function() lines(land))
+
+## tmin = avg tas - 0.5*dtr
+trace_22tmin_corr <- round(trace_22tas_corr - (0.5 * trace_22dtr_corr), 2)
+varnames(trace_22tmin_corr) <- "tasmin"
+longnames(trace_22tmin_corr) <- "minimum air temperature"
+units(trace_22tmin_corr) <- "deg_C"
+time(trace_22tmin_corr, tstep = "months") <- 1:12
+trace_22tmin_corr
+
+# what do the corrected monthly avg min temps look like?
+plot(trace_22tmin_corr,
+     range = c(5, 35), fill_range = TRUE,
+     main = paste0(month.abb, " corrected tasmin"),
+     col = hcl.colors(100, "spectral", rev = TRUE),
+     fun = function() lines(land))
+```
+
+## 22ka BP temperature check
+
+Here we do the same check as before - making sure that t~max~ is never less than t~min~
+
+```{r paleo-temp-check, fig.width=6, fig.height=6}
+# How often is tmax < tmin for the corrected temperatures
+dtr22k_temp_anoms <- app(trace_22tmax_corr < trace_22tmin_corr, sum)
+dtr22k_temp_anoms <- round((dtr22k_temp_anoms / nlyr(trace_22tmax_corr)) * 100, 2)
+dtr22k_temp_anoms
+
+plot(dtr22k_temp_anoms, fun = function() lines(land))
+```
+
+## Karger at al comparison
+
+Here is a quick plot showing the issues that I identified with the Karger et al dataset (`CHELSA_TraCE`) where sometimes the t~max~ values are less than the t~min~ values.
+
+This data is shown for land surface areas in Sahul and Europe, to show that it is not a localised issue, and that the issue persists through time.
+
+```{r karger-data-probs, echo = FALSE}
+land <- vect(rnaturalearthhires::countries10)
+land <- aggregate(land)
+
+if (!file.exists("03_comparisons/bc_investigations/karger_europe_1950.tif")) {
+  karger_tmax_sahul <- (rast(sprintf("/mnt/Data/CHELSA_Trace21/CHELSA_TraCE21k_tasmax_%s_-200_V1.0.tif", 1:12),
+                          win = ext(105, 161.25, -52.5, 11.25)) * 0.1) - 273.15
+  karger_tmin_sahul <- (rast(sprintf("/mnt/Data/CHELSA_Trace21/CHELSA_TraCE21k_tasmin_%s_-200_V1.0.tif", 1:12),
+                          win = ext(105, 161.25, -52.5, 11.25)) * 0.1) - 273.15
+  karger_sahul_22k <- round((app(karger_tmax_sahul < karger_tmin_sahul, sum) / 12)*100,2)
+  writeRaster(karger_sahul_22k, "03_comparisons/bc_investigations/karger_sahul_22k.tif")
+  karger_tmax_sahul <- (rast(sprintf("/mnt/Data/CHELSA_Trace21/CHELSA_TraCE21k_tasmax_%s_20_V1.0.tif", 1:12),
+                          win = ext(105, 161.25, -52.5, 11.25)) * 0.1) - 273.15
+  karger_tmin_sahul <- (rast(sprintf("/mnt/Data/CHELSA_Trace21/CHELSA_TraCE21k_tasmin_%s_20_V1.0.tif", 1:12),
+                          win = ext(105, 161.25, -52.5, 11.25)) * 0.1) - 273.15
+  karger_sahul_1950 <- round((app(karger_tmax_sahul < karger_tmin_sahul, sum) / 12)*100,2)
+  writeRaster(karger_sahul_1950, "03_comparisons/bc_investigations/karger_sahul_1950.tif")
+  karger_tmax_europe <- (rast(sprintf("/mnt/Data/CHELSA_Trace21/CHELSA_TraCE21k_tasmax_%s_-200_V1.0.tif", 1:12),
+                          win = ext(-11.3, 40.8, 32.6, 72.4)) * 0.1) - 273.15
+  karger_tmin_europe <- (rast(sprintf("/mnt/Data/CHELSA_Trace21/CHELSA_TraCE21k_tasmin_%s_-200_V1.0.tif", 1:12),
+                          win = ext(-11.3, 40.8, 32.6, 72.4)) * 0.1) - 273.15
+  karger_europe_22k <- round((app(karger_tmax_europe < karger_tmin_europe, sum) / 12)*100,2)
+  writeRaster(karger_europe_22k, "03_comparisons/bc_investigations/karger_europe_22k.tif")
+  karger_tmax_europe <- (rast(sprintf("/mnt/Data/CHELSA_Trace21/CHELSA_TraCE21k_tasmax_%s_20_V1.0.tif", 1:12),
+                          win = ext(-11.3, 40.8, 32.6, 72.4)) * 0.1) - 273.15
+  karger_tmin_europe <- (rast(sprintf("/mnt/Data/CHELSA_Trace21/CHELSA_TraCE21k_tasmin_%s_20_V1.0.tif", 1:12),
+                          win = ext(-11.3, 40.8, 32.6, 72.4)) * 0.1) - 273.15
+  karger_europe_1950 <- round((app(karger_tmax_europe < karger_tmin_europe, sum) / 12)*100,2)
+  writeRaster(karger_europe_1950, "03_comparisons/bc_investigations/karger_europe_1950.tif")
+} else {
+  karger_sahul_22k <- rast("03_comparisons/bc_investigations/karger_sahul_22k.tif")
+  karger_sahul_1950 <- rast("03_comparisons/bc_investigations/karger_sahul_1950.tif")
+  karger_europe_22k <- rast("03_comparisons/bc_investigations/karger_europe_22k.tif")
+  karger_europe_1950 <- rast("03_comparisons/bc_investigations/karger_europe_1950.tif")
+}
+
+# make masks
+kargerMask_22_Sahul <- rast("/mnt/Data/CHELSA_Trace21/Input/CHELSA_TraCE21k_dem_-200_V1.0.tif",
+                            win = ext(105, 161.25, -52.5, 11.25))
+kargerMask_22_Sahul <- ifel(is.na(kargerMask_22_Sahul), NA_integer_, 1L)
+kargerMask_1950_Sahul <- rast("/mnt/Data/CHELSA_Trace21/Input/CHELSA_TraCE21k_dem_20_V1.0.tif",
+                              win = ext(105, 161.25, -52.5, 11.25))
+kargerMask_1950_Sahul <- ifel(is.na(kargerMask_1950_Sahul), NA_integer_, 1L)
+kargerMask_22_Europe <- rast("/mnt/Data/CHELSA_Trace21/Input/CHELSA_TraCE21k_dem_-200_V1.0.tif",
+                             win = ext(-11.3, 40.8, 32.6, 72.4))
+kargerMask_22_Europe <- ifel(is.na(kargerMask_22_Europe), NA_integer_, 1L)
+kargerMask_1950_Europe <- rast("/mnt/Data/CHELSA_Trace21/Input/CHELSA_TraCE21k_dem_20_V1.0.tif",
+                               win = ext(-11.3, 40.8, 32.6, 72.4))
+kargerMask_1950_Europe <- ifel(is.na(kargerMask_1950_Europe), NA_integer_, 1L)
+```
+
+```{r plot-karger-problems, echo = FALSE}
+par(mfrow = c(2, 2))
+plot(mask(karger_sahul_22k, kargerMask_22_Sahul), 
+     fun = function() lines(land),
+     type = "continuous",
+     col = hcl.colors(100, "RdYlBu", rev = TRUE),
+     range = c(0, 100), fill_range = TRUE,
+     main = "% tmax < tmin 22k BP")
+plot(mask(karger_sahul_1950, kargerMask_1950_Sahul),
+     fun = function() lines(land),
+     type = "continuous",
+     col = hcl.colors(100, "RdYlBu", rev = TRUE),
+     range = c(0, 100), fill_range = TRUE,
+     main = "% tmax < tmin 1950CE")
+plot(mask(karger_europe_22k, kargerMask_22_Europe), 
+     fun = function() lines(land),
+     type = "continuous",
+     col = hcl.colors(100, "RdYlBu", rev = TRUE),
+     range = c(0, 100), fill_range = TRUE,
+     main = "% tmax < tmin 22k BP")
+plot(mask(karger_europe_1950, kargerMask_1950_Europe),
+     fun = function() lines(land),
+     type = "continuous",
+     col = hcl.colors(100, "RdYlBu", rev = TRUE),
+     range = c(0, 100), fill_range = TRUE,
+     main = "% tmax < tmin 1950CE")
+par(mfrow = c(1, 1))
+```
+

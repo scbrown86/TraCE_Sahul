@@ -67,3 +67,11 @@ rsconnect/
 # ignore temp delta file
 delta_remapped_tmp.nc
 02_data/02_processed/oro_high.nc
+
+# ignore markdown outputs and temp files
+03_comparisons/*.html
+03_comparisons/*/figure-html/*.png
+03_comparisons/bc_investigations/*.nc
+03_comparisons/scratch/*.tif
+03_comparisons/bc_investigations/*.tif
+03_comparisons/scratch/*.nc
