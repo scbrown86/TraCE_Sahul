@@ -329,7 +329,7 @@ delta_dtr <- chelsa_dtr / downTrace_dtr
 delta_dtr[!is.finite(delta_dtr)] <- 1 # if delta_dtr is infinite, set ratio = 1
 varnames(delta_dtr) <- "dtr"
 longnames(delta_dtr) <- "diurnal temperature range delta"
-units(delta_dtr) <- "deg_C"
+units(delta_dtr) <- ""
 delta_dtr
 
 plot(delta_dtr, range = c(0, 3), fill_range = TRUE, 

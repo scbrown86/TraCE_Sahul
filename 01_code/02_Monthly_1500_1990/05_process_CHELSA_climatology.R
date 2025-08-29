@@ -5,6 +5,7 @@ library(gtools)
 library(pbapply)
 library(rnaturalearthhires)
 library(qgisprocess)
+library(data.table)
 
 # safe
 safe_spline <- purrr::safely(qgisprocess::qgis_run_algorithm,
@@ -61,6 +62,7 @@ chelsa_climatologies <- c(
   "02_data/02_processed/CHELSA/CHELSA_tas_climatology.nc")
 
 if (!all(file.exists(chelsa_climatologies))) {
+  # calculate the climatological average, and mask to land only
   pr_avg <- tapp(pr_avg, idx, mean, cores = 12L)
   tmn_avg <- tapp(tmn_avg, idx, mean, cores = 12L)
   tmx_avg <- tapp(tmx_avg, idx, mean, cores = 12L)
@@ -100,57 +102,61 @@ if (!all(file.exists(chelsa_climatologies))) {
   tas_avg <- rast("02_data/02_processed/CHELSA/CHELSA_tas_climatology.nc")
 }
 
-# # mask the CHELSA tas data to land
-# chelsa_land_mask <- pr_avg[[1]]
-# chelsa_land_mask <- ifel(is.na(chelsa_land_mask), NA_integer_, 1L)
-# plot(chelsa_land_mask, fun = function() lines(land))
+# Load in the land/sea mask
+chelsa_mask <- rast("/mnt/Data/CHELSA_Trace21/Input/CHELSA_TraCE21k_dem_20_V1.0.tif",
+                    win = ext(105.0, 161.25, -52.5, 11.25))
+chelsa_mask <- ifel(is.na(chelsa_mask), NA_integer_, 1L)
+chelsa_mask <- project(chelsa_mask, pr_avg, "near")
 
-# tmn_avg <- mask(tmn_avg, chelsa_land_mask)
-# tmx_avg <- mask(tmx_avg, chelsa_land_mask)
-# tas_avg <- mask(tas_avg, chelsa_land_mask)
+# Mask the CHELSA v1.2 data
+pr_avg <- mask(pr_avg, chelsa_mask)
+tmn_avg <- mask(tmn_avg, chelsa_mask)
+tmx_avg <- mask(tmx_avg, chelsa_mask)
+tas_avg <- mask(tas_avg, chelsa_mask)
 
 plot(pr_avg[[1]], range = c(0, 0.0003), fill_range = TRUE, fun = function() lines(land), col = hcl.colors(100, "YlGnBu", rev = TRUE))
-plot(tas_avg[[1]], range = c(5, 30), fill_range = TRUE, fun = function() lines(land), col = hcl.colors(100, "Roma", rev = TRUE))
+plot(tas_avg[[1]], range = c(5, 30), fill_range = TRUE, fun = function() lines(land), col = hcl.colors(100, "Spectral", rev = TRUE))
 plot(app(pr_avg, sum), range = c(0, 0.002), fill_range = TRUE, fun = function() lines(land), col = hcl.colors(100, "YlGnBu", rev = TRUE))
-plot(tmx_avg[[1]] - tas_avg[[1]])
+plot(tmx_avg[[1]] - tmn_avg[[1]])
 
 # convert the CHELSA climatology data to 0.5 degree using b-splines
 source("01_code/00_functions/interpolate_bspline.R")
-fine_clim <- list(pr_avg, tas_avg, tmn_avg, tmx_avg)
+
+fine_clim <- list(pr_avg, tmn_avg, tmx_avg)
 varnames(fine_clim[[1]]) <- "pr"
-varnames(fine_clim[[2]]) <- "tas"
-varnames(fine_clim[[3]]) <- "tasmin"
-varnames(fine_clim[[4]]) <- "tasmax"
-# convert back to kg/m2/s
-## fine_clim[[1]] <- fine_clim[[1]] / (86400 * c(31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31))
+varnames(fine_clim[[2]]) <- "tasmin"
+varnames(fine_clim[[3]]) <- "tasmax"
+fine_clim
+
+# multilevel b-spline to 0.5°
 coarse_chelsa_clim <- lapply(fine_clim, interpolate_bspline,
   output_dir = "02_data/02_processed/CHELSA",
   bspline_ext = ext(105.0, 161.25, -52.5, 11.25),
   target_size = 0.5,
-  parallel_cores = 12,
+  parallel_cores = 12L,
   start_date = as.Date("1985-01-16"),
   outname_template = "CHELSA_coarse_%s_climatology.nc",
+  algo = "bspline", ## <
   load_exist = TRUE)
-names(coarse_chelsa_clim) <- c("pr", "tas", "tasmin", "tasmax")
+names(coarse_chelsa_clim) <- c("pr", "tasmin", "tasmax")
 coarse_chelsa_clim
 
 plot(app(coarse_chelsa_clim$pr, sum)*86400*12, range = c(0, 3000), fill_range = TRUE, fun = function() lines(land), col = hcl.colors(100, "YlGnBu", rev = TRUE))
-plot(coarse_chelsa_clim$tas, range = c(5, 30), fill_range = TRUE, fun = function() lines(land), col = hcl.colors(100, "Spectral", rev = TRUE))
-plot(coarse_chelsa_clim$tasmax - coarse_chelsa_clim$tas, range = c(1, 5), fill_range = TRUE, fun = function() lines(land), col = hcl.colors(100, "Spectral", rev = TRUE))
+panel(coarse_chelsa_clim$tasmin, range = c(5, 30), fill_range = TRUE, fun = function() lines(land), col = hcl.colors(100, "Spectral", rev = TRUE))
+panel(coarse_chelsa_clim$tasmax, range = c(5, 30), fill_range = TRUE, fun = function() lines(land), col = hcl.colors(100, "Spectral", rev = TRUE))
+panel(coarse_chelsa_clim$tasmax - coarse_chelsa_clim$tasmin, range = c(0, 10), fill_range = TRUE, fun = function() lines(land), col = hcl.colors(100, "Spectral", rev = TRUE))
 
 
 #### TRACE ####
-# load in the raw trace data
-brown <- list(rast("/media/dafcluster4/storage/TraCE_Monthly/PRECC/trace.01-36.22000BP-1990CE.cam2.h0.PRECC.0000101-2204012.Sahul.concat.1500_1989CE.nc",
-                   lyrs = 5761:5880) +
-                rast("/media/dafcluster4/storage/TraCE_Monthly/PRECL/trace.01-36.22000BP-1990CE.cam2.h0.PRECL.0000101-2204012.Sahul.concat.1500_1989CE.nc",
-                     lyrs = 5761:5880),
-              rast("/media/dafcluster4/storage/TraCE_Monthly/TS/trace.01-36.22000BP-1990CE.cam2.h0.TS.0000101-2204012.Sahul.concat.1500_1989CE.nc",
+# load in our downscaled TraCE data
+brown <- list(rast("/media/dafcluster4/storage/TraCE_1500_1990CE/1500_1990/out/pr/TraCE_downscaled_1500_1990_concat.nc",
+                   lyrs = 5761:5880),
+              rast("/media/dafcluster4/storage/TraCE_1500_1990CE/1500_1990/out/tasmin/TraCE_downscaled_1500_1990_concat.nc",
                    lyrs = 5761:5880)-273.15,
-              rast("/media/dafcluster4/storage/TraCE_Monthly/TSMX/trace.01-36.22000BP-1990CE.cam2.h0.TSMX.0000101-2204012.Sahul.concat.1500_1989CE.nc",
-                   lyrs = 5761:5880)-273.15,
-              rast("/media/dafcluster4/storage/TraCE_Monthly/TSMN/trace.01-36.22000BP-1990CE.cam2.h0.TSMN.0000101-2204012.Sahul.concat.1500_1989CE.nc",
+              rast("/media/dafcluster4/storage/TraCE_1500_1990CE/1500_1990/out/tasmax/TraCE_downscaled_1500_1990_concat.nc",
                    lyrs = 5761:5880)-273.15)
+brown
+# make climatological monthly averages from 1980-1989
 brown <- pblapply(brown, function(i) {
   if (nlyr(i) != 12) {
     time(i) <- seq(as.Date("1980-01-16"), by = "month", l = 120)
@@ -162,18 +168,17 @@ brown <- pblapply(brown, function(i) {
   }
 })
 varnames(brown[[1]]) <- "pr"
-varnames(brown[[2]]) <- "tas"
+varnames(brown[[2]]) <- "tasmin"
 varnames(brown[[3]]) <- "tasmax"
-varnames(brown[[4]]) <- "tasmin"
 units(brown[[1]]) <- "kg/m2/s"
-units(brown[[2]]) <- units(brown[[3]]) <- units(brown[[4]]) <-"deg_C"
-names(brown) <- c("pr", "tas", "tasmax", "tasmin")
+units(brown[[2]]) <- units(brown[[3]]) <- "deg_C"
+names(brown) <- c("pr", "tasmin", "tasmax")
 brown
-minmax(brown$tasmax - brown$tas)
+minmax(brown$tasmax - brown$tasmin)
 
 brown_climatologies <- c(
   "02_data/02_processed/TRACE/TraCE_coarse_pr_climatology.nc",
-  "02_data/02_processed/TRACE/TraCE_coarse_tas_climatology.nc",
+  #"02_data/02_processed/TRACE/TraCE_coarse_tas_climatology.nc",
   "02_data/02_processed/TRACE/TraCE_coarse_tasmax_climatology.nc",
   "02_data/02_processed/TRACE/TraCE_coarse_tasmin_climatology.nc")
 
@@ -206,12 +211,13 @@ if (!all(file.exists(brown_climatologies))) {
     names(r) <- month.abb
     return(r)
   })
-  names(brown) <- c("pr", "tas", "tasmax", "tasmin")
+  names(brown) <- c("pr", "tasmin", "tasmax")
   brown
   # convert TraCE climatology to 0.5 degrees
   if (!dir.exists("02_data/02_processed/TRACE")) {
     dir.create("02_data/02_processed/TRACE", recursive = TRUE)
   }
+  # multilevel b-spline to 0.5°
   coarse_trace_clim <- lapply(brown, interpolate_bspline,
     output_dir = "02_data/02_processed/TRACE",
     bspline_ext = ext(105.0, 161.25, -52.5, 11.25),
@@ -219,18 +225,26 @@ if (!all(file.exists(brown_climatologies))) {
     parallel_cores = 12,
     start_date = as.Date("1985-01-16"),
     outname_template = "TraCE_coarse_%s_climatology.nc",
+    algo = "bspline", ## <
     load_exist = TRUE)
-  names(coarse_trace_clim) <- c("pr", "tas", "tasmax", "tasmin")
+  names(coarse_trace_clim) <- c("pr", "tasmin", "tasmax")
   coarse_trace_clim
 } else {
   coarse_trace_clim <- lapply(brown_climatologies, rast)
-  names(coarse_trace_clim) <- c("pr", "tas", "tasmax", "tasmin")
+  names(coarse_trace_clim) <- c("pr", "tasmax", "tasmin")
 }
 coarse_trace_clim
 
-plot(coarse_trace_clim$tasmax - coarse_trace_clim$tas)
-minmax(coarse_trace_clim$tasmax - coarse_trace_clim$tas)
-round(minmax(coarse_trace_clim$tasmin - coarse_trace_clim$tas), 2)
+panel(0.5 * (coarse_trace_clim$tasmax + coarse_trace_clim$tasmin), # avg temps
+     fun = function() lines(land),
+     range = c(5, 35), fill_range = TRUE,
+     col = hcl.colors(100, "spectral", rev = TRUE))
+panel(coarse_trace_clim$tasmax - coarse_trace_clim$tasmin, # DTR
+     range = c(0, 16), fill_range = TRUE, 
+     col = hcl.colors(100, "spectral", rev = TRUE),
+     fun = function() lines(land))
+minmax(coarse_trace_clim$tasmax - coarse_trace_clim$tasmin) # some negative dtr values
+
 
 #### DELTAS ####
 # create delta between the CHELSA and downscaled TraCE climatology
@@ -238,33 +252,60 @@ rbind(
   minmax(coarse_chelsa_clim$pr * (c(31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31) * 86400)),
   minmax(coarse_trace_clim$pr * (c(31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31) * 86400)))
 
-delta_pr <-( coarse_chelsa_clim$pr + 1e-4) / (coarse_trace_clim$pr + 1e-4)
+# simple delta correction for precip.
+delta_pr <- (coarse_chelsa_clim$pr + 1e-4) / (coarse_trace_clim$pr + 1e-4)
+varnames(delta_pr) <- "pr"
+longnames(delta_pr) <- "precipitation delta"
+units(delta_pr) <- ""
 delta_pr
-plot(delta_pr, fun = function() lines(land, col = "#000000"),
+panel(delta_pr[[1:4]], fun = function() lines(land, col = "#000000"),
      range = c(0, 2), fill_range = TRUE,
-     breaks = seq(0, 2, by = 0.1),
-     col = hcl.colors(20, "Spectral"))
-# temperature delta
-delta_tas <- coarse_chelsa_clim$tas - coarse_trace_clim$tas
-delta_tas
-plot(delta_tas, fun = function() lines(land, col = "#FFFFFF"),
-     range = c(-5, 5), fill_range = TRUE, col = hcl.colors(100, "Spectral"))
+     col = hcl.colors(100, "mako"))
 
-delta_tasmin <- coarse_chelsa_clim$tasmin - coarse_trace_clim$tasmin
-delta_tasmin
-plot(delta_tasmin, fun = function() lines(land, col = "#FFFFFF"),
-     range = c(-10, 10), fill_range = TRUE, col = hcl.colors(100, "Spectral"))
+# Tempaerture correction is a mulit step process. 
+# correct mean temperature with additive delta
+# correct dtr with ratio
+# calculate new min/max as corr. tas +/- 0.5 * corr. dtr
 
-delta_tasmax <- coarse_chelsa_clim$tasmax - coarse_trace_clim$tasmax
-delta_tasmax
-plot(delta_tasmax, fun = function() lines(land, col = "#FFFFFF"),
-     range = c(-10, 10), fill_range = TRUE, col = hcl.colors(100, "Spectral"))
+# average temperature delta
+## average chelsa - average downscaled TraCE
+delta_tmean <- (0.5 * (coarse_chelsa_clim$tasmax + coarse_chelsa_clim$tasmin)) - 
+                (0.5 * (coarse_trace_clim$tasmax + coarse_trace_clim$tasmin))
+varnames(delta_tmean) <- "tas"
+longnames(delta_tmean) <- "mean air temperature delta"
+units(delta_tmean) <- "deg_C"
+delta_tmean
+panel(delta_tmean, fun = function() lines(land),
+     range = c(-10, 10), fill_range = TRUE, col = hcl.colors(100, "Spectral", rev = TRUE))
 
-# convert the delta back to 0.05 degrees using b-splines
+# diurnal temperature range
+## any negative oe zero values will be changed to 0.05°C
+## downscaled TraCE
+downTrace_dtr <- coarse_trace_clim$tasmax - coarse_trace_clim$tasmin
+sum(values(downTrace_dtr) <= 0, na.rm = TRUE)/(ncell(downTrace_dtr)*nlyr(downTrace_dtr)) * 100 # ~1%
+downTrace_dtr <- ifel(downTrace_dtr <= 0, 0.05, downTrace_dtr)
+
+chelsa_dtr <- coarse_chelsa_clim$tasmax - coarse_chelsa_clim$tasmin
+sum(values(chelsa_dtr) <= 0, na.rm = TRUE)/(ncell(chelsa_dtr)*nlyr(chelsa_dtr)) * 100 # ~ 0.002% (4 cells in total)
+chelsa_dtr <- ifel(chelsa_dtr <= 0, 0.05, chelsa_dtr)
+
+delta_dtr <- chelsa_dtr / downTrace_dtr
+delta_dtr[!is.finite(delta_dtr)] <- 1 # set any infinite to 1
+sum(values(delta_dtr) <= 0, na.rm = TRUE) # 0
+varnames(delta_dtr) <- "dtr"
+longnames(delta_dtr) <- "diurnal temperature range delta"
+units(delta_dtr) <- ""
+delta_dtr
+panel(delta_dtr, range = c(0, 5), fill_range = TRUE, 
+     col = hcl.colors(100, "Spectral", rev = TRUE),
+     fun = function() lines(land))
+
+# convert the delta back to 0.05 degrees using bilinear interpolation
 if (!dir.exists("02_data/02_processed/deltas")) {
   dir.create("02_data/02_processed/deltas", recursive = TRUE)
 }
-deltas <- list(delta_pr, delta_tas, delta_tasmax, delta_tasmin)
+deltas <- list(delta_pr, delta_tmean, delta_dtr)
+deltas
 deltas_fine <- lapply(deltas, interpolate_bspline,
   output_dir = "02_data/02_processed/deltas",
   bspline_ext = ext(105.0, 161.25, -52.5, 11.25),
@@ -272,104 +313,162 @@ deltas_fine <- lapply(deltas, interpolate_bspline,
   parallel_cores = 12,
   start_date = as.Date("1985-01-16"),
   outname_template = "delta_fine_%s_climatology.nc",
-  load_exist = TRUE,
-  delta = TRUE)
-names(deltas_fine) <- c("pr", "tas", "tasmax", "tasmin")
+  algo = "bilinear", ## <
+  delta = TRUE, ## <
+  load_exist = FALSE)
+names(deltas_fine) <- c("pr", "tas", "dtr")
 deltas_fine
 deltas_fine$pr*1
-plot(deltas_fine$pr, fun = function() lines(land, col = "#000000"),
+panel(deltas_fine$pr, fun = function() lines(land),
      range = c(0, 2), fill_range = TRUE,
      breaks = seq(0, 2, by = 0.1),
      col = hcl.colors(20, "Spectral"))
-plot(deltas_fine$tas, fun = function() lines(land, col = "#FFFFFF"),
+panel(deltas_fine$tas, fun = function() lines(land),
      range = c(-10, 10), fill_range = TRUE, col = hcl.colors(100, "Spectral"))
-plot(deltas_fine$tasmax, fun = function() lines(land, col = "#FFFFFF"),
-     range = c(-10, 10), fill_range = TRUE, col = hcl.colors(100, "Spectral"))
-plot(deltas_fine$tasmin, fun = function() lines(land, col = "#FFFFFF"),
-     range = c(-10, 10), fill_range = TRUE, col = hcl.colors(100, "Spectral"))
+plot(deltas_fine$dtr, fun = function() lines(land),
+     range = c(0, 5), fill_range = TRUE, col = hcl.colors(100, "Spectral", rev = TRUE))
 
-# load in data for the first and last time step and check the effect of delta
-downscaled_22k <- list.files("/media/dafcluster4/storage/TraCE_22k_1500CE/chunk_out/00001_00012/out",
-                             recursive = TRUE, full.names = TRUE)
-downscaled_22k <- split(downscaled_22k, sapply(downscaled_22k, function(x) sub(".*CHELSA_([a-z]+)_.*", "\\1", basename(x)))) |> 
-                    lapply(rast)
-mask_22ka <- downscaled_22k$pr[[1]]
-mask_22ka <- ifel(is.na(mask_22ka), NA, 1)
-plot((downscaled_22k$pr * 86400 * c(31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)) * deltas_fine$pr)
-plot((downscaled_22k$tas-273.15) + deltas_fine$tas)
-par(mfrow = c(2, 2))
-plot(downscaled_22k$tasmax[[9]]-273.15, range = c(5, 30), fill_range = TRUE)
-plot(mask(deltas_fine$tasmax[[9]], mask_22ka))
-plot(mask(deltas_fine$tasmax[[9]], mask_22ka) + (downscaled_22k$tasmax[[9]]-273.15), range = c(5, 30), fill_range = TRUE)
-minmax((downscaled_22k$tasmax + deltas_fine$tasmax) - (downscaled_22k$tas + deltas_fine$tas))
-minmax((downscaled_22k$tasmin + deltas_fine$tasmin) - (downscaled_22k$tas + deltas_fine$tas))
-minmax((downscaled_22k$tasmax[[1]] + deltas_fine$tasmax[[1]]) - (downscaled_22k$tasmin[[1]] + deltas_fine$tasmin[[1]]))
+# test the corrections on the 1980-1989 data
+## read the data back in
+brown_8089 <- list(rast("/media/dafcluster4/storage/TraCE_1500_1990CE/1500_1990/out/pr/TraCE_downscaled_1500_1990_concat.nc",
+                   lyrs = 5761:5880),
+              rast("/media/dafcluster4/storage/TraCE_1500_1990CE/1500_1990/out/tasmin/TraCE_downscaled_1500_1990_concat.nc",
+                   lyrs = 5761:5880)-273.15,
+              rast("/media/dafcluster4/storage/TraCE_1500_1990CE/1500_1990/out/tasmax/TraCE_downscaled_1500_1990_concat.nc",
+                   lyrs = 5761:5880)-273.15)
+names(brown_8089) <- c("pr", "tasmin", "tasmax")
+brown_8089
 
-# some areas where max is < min
-brown_22k <- ((downscaled_22k$tasmax - 273.15) + deltas_fine$tasmax) - ((downscaled_22k$tasmin - 273.15) + deltas_fine$tasmin)
-plot(brown_22k, main = paste(month.abb, " max - min temp"),
-     range = c(-10, 10), fill_range = TRUE, col = hcl.colors(20, "Spectral"), 
+brown_pr_corr <- (brown_8089$pr * deltas_fine$pr) * 86400 * c(31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
+brown_pr_corr
+panel(tapp(brown_pr_corr, "month", mean), range = c(0, 400), 
+     col = hcl.colors(100, "YlGnBu", rev = TRUE),
+     fill_range = TRUE, fun = function() lines(land))
+
+brown_tas_corr <- (0.5 * (brown_8089$tasmax + brown_8089$tasmin)) + deltas_fine$tas
+panel(tapp(brown_tas_corr, "month", mean), 
+     range = c(5, 30), fill_range = TRUE,
+     col = hcl.colors(100, "spectral", rev = TRUE),
      fun = function() lines(land))
 
-# Karger et al have the same issue! Max is lower than the min after bias correction
-karger_22k <- ((rast(sprintf("/mnt/Data/CHELSA_Trace21/CHELSA_TraCE21k_tasmax_%s_-200_V1.0.tif", 1:12), 
-                     win = ext(downscaled_22k$tasmax))*0.1)- 273.15) -
-      ((rast(sprintf("/mnt/Data/CHELSA_Trace21/CHELSA_TraCE21k_tasmin_%s_-200_V1.0.tif", 1:12), 
-           win = ext(downscaled_22k$tasmax))*0.1)- 273.15)
-karger_22k <- mask(karger_22k, disagg(mask_22ka, 6, "near"))
-karger_22k
-plot(karger_22k, main = paste(month.abb, " max - min temp"),
-     range = c(-8, 8), fill_range = TRUE, col = hcl.colors(20, "Spectral"), 
+# dtr correction
+brown_dtr_corr <- (brown_8089$tasmax - brown_8089$tasmin)
+brown_dtr_corr <- ifel(brown_dtr_corr <= 0, 0.05, brown_dtr_corr)
+brown_dtr_corr <- brown_dtr_corr * deltas_fine$dtr # multiply by the dtr correction
+
+plot(tapp(brown_dtr_corr, "month", mean), 
+     range = c(0, 16), fill_range = TRUE, 
+     col = hcl.colors(100, "spectral", rev = TRUE),
      fun = function() lines(land))
 
-# load in data for the first and last time step and check the effect of delta
-downscaled_1950 <- list.files("/media/dafcluster4/storage/TraCE_1500_1990CE/1500_1990/chunk_out/04801_05880/out/",
-                             recursive = TRUE, full.names = TRUE)
-downscaled_1950 <- split(downscaled_1950, sapply(downscaled_1950, function(x) sub(".*CHELSA_([a-z]+)_.*", "\\1", basename(x)))) |> 
-                    pblapply(function(x) app(rast(x), mean))
-mask_1950 <- downscaled_1950$pr[[1]]
-mask_1950 <- ifel(is.na(mask_1950), NA, 1)
-plot(downscaled_1950$pr * 86400 * c(31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31))
-plot((downscaled_1950$pr * 86400 * c(31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)) * deltas_fine$pr)
-plot((downscaled_1950$tas-273.15) + deltas_fine$tas)
-minmax((downscaled_22k$tasmax + deltas_fine$tasmax) - (downscaled_22k$tas + deltas_fine$tas))
-minmax((downscaled_22k$tasmin + deltas_fine$tasmin) - (downscaled_22k$tas + deltas_fine$tas))
-minmax((downscaled_22k$tasmax[[1]] + deltas_fine$tasmax[[1]]) - (downscaled_22k$tasmin[[1]] + deltas_fine$tasmin[[1]]))
+# Quick check for unusually high dtr values
+high_dtr <- setorder(setDT(as.data.frame(where.max(brown_dtr_corr))), -value)
+hist(high_dtr[["value"]])
+abline(v = quantile(high_dtr[["value"]], c(0.25, 0.5, 0.75, 0.90)))
 
-# some areas where max is < min
-brown_contemp <- ((downscaled_22k$tasmax[[1]] - 273.15) + deltas_fine$tasmax[[1]]) - ((downscaled_22k$tasmin[[1]] - 273.15) + deltas_fine$tasmin[[1]])
-plot(brown_22k, main = "brown maximum temp - minimum temp",
-     range = c(-5, 5), fill_range = TRUE, col = hcl.colors(10, "Spectral"), 
+high_locs <- copy(high_dtr)[, .(value = max(value)), by = c("cell", "layer")][value >= 35, ]
+high_locs <- vect(xyFromCell(brown_dtr_corr, high_locs[["cell"]]), 
+                  crs = "EPSG:4326")
+plot(app(brown_dtr_corr, max),
+     breaks = c(-Inf, 35, Inf),
+     col = c("#4daf4a", "#e41a1c"),
+     fun = function() {
+       lines(land)
+       points(high_locs, pch = 19, bg = "#e41a1c")
+     },
+     buffer = TRUE)
+
+# What are the DTR correction factors at those locations?
+extract(deltas_fine$dtr, high_locs)
+
+# very high values in May (layer 5) and August (layer 8)
+hist(as.vector(values(deltas_fine$dtr[[c(5, 8)]])))
+abline(v = quantile(as.vector(values(deltas_fine$dtr[[c(5, 8)]])), 
+                    c(0.25, 0.5, 0.75, 0.95)))
+
+# Mask to 22k BP mask (maximum extent ever seen)
+mask_22k <- rast("/mnt/Data/CHELSA_Trace21/Input/CHELSA_TraCE21k_dem_-200_V1.0.tif",
+                win = ext(105.0, 161.25, -52.5, 11.25),
+                snap = "out")
+mask_22k <- ifel(is.na(mask_22k), 0L, 1L)
+mask_22k <- project(mask_22k, deltas_fine$pr, method = "mode")
+mask_22k <- ifel(mask_22k == 0, NA_integer_, 1L)
+mask_22k
+plot(mask_22k, fun = function() lines(land))
+deltas_fineMasked <- pblapply(deltas_fine, function(i) {
+  mask(i, mask_22k)
+})
+deltas_fineMasked
+
+# what are the percentiles for those masked layers
+minmax(deltas_fineMasked$dtr[[c(5,8)]])
+quantile(as.vector(values(deltas_fineMasked$dtr[[5]])), c(0.25, 0.5, 0.75, 0.95, 0.99), na.rm = TRUE)
+quantile(as.vector(values(deltas_fineMasked$dtr[[8]])), c(0.25, 0.5, 0.75, 0.95, 0.99), na.rm = TRUE)
+
+# replace extreme values with 99th percentile
+dtr5_99 <- quantile(as.vector(values(deltas_fineMasked$dtr[[5]])), 0.99, na.rm = TRUE)
+dtr8_99 <- quantile(as.vector(values(deltas_fineMasked$dtr[[8]])), 0.99, na.rm = TRUE)
+deltas_fineMasked$dtr[[5]] <- ifel(deltas_fineMasked$dtr[[5]] > dtr5_99, dtr5_99, deltas_fineMasked$dtr[[5]])
+deltas_fineMasked$dtr[[8]] <- ifel(deltas_fineMasked$dtr[[8]] > dtr5_99, dtr5_99, deltas_fineMasked$dtr[[8]])
+
+# multiply by the correction (again)
+brown_dtr_corr <- (brown_8089$tasmax - brown_8089$tasmin)
+brown_dtr_corr <- ifel(brown_dtr_corr <= 0, 0.05, brown_dtr_corr)
+brown_dtr_corr <- brown_dtr_corr * deltas_fineMasked$dtr
+brown_dtr_corr
+
+# what does the corrected monthly DTR look like?
+plot(tapp(brown_dtr_corr, "month", mean), 
+     range = c(0, 16), fill_range = TRUE, 
+     col = hcl.colors(100, "spectral", rev = TRUE),
      fun = function() lines(land))
 
-# Karger et al have the same issue! Max is lower than the min after bias correction
-karger_22k <- ((rast("/mnt/Data/CHELSA_Trace21/CHELSA_TraCE21k_tasmax_1_-200_V1.0.tif", 
-      win = ext(downscaled_22k$tasmax))*0.1)- 273.15) -
-      ((rast("/mnt/Data/CHELSA_Trace21/CHELSA_TraCE21k_tasmin_1_-200_V1.0.tif", 
-           win = ext(downscaled_22k$tasmax))*0.1)- 273.15)
-karger_22k <- mask(karger_22k, disagg(mask_22ka, 6, "near"))
-karger_22k
-plot(karger_22k, main = "karger maximum temp - karger minimum temp",
-     range = c(-5, 5), fill_range = TRUE, col = hcl.colors(10, "Spectral"), 
+brown_tmax_corr <- round(brown_tas_corr + (0.5 * deltas_fineMasked$dtr), 2)
+varnames(brown_tmax_corr) <- "tasmax"
+longnames(brown_tmax_corr) <- "maximum air temperature"
+units(brown_tmax_corr) <- "deg_C"
+time(brown_tmax_corr) <- seq(as.Date("1980-01-16"), by = "month", l = nlyr(brown_tmax_corr))
+brown_tmax_corr
+
+# what do the corrected monthly avg max temps look like?
+panel(tapp(brown_tmax_corr, "month", mean),
+     range = c(5, 35), fill_range = TRUE,
+     main = paste0(month.abb, " corrected tasmax"),
+     col = hcl.colors(100, "spectral", rev = TRUE),
      fun = function() lines(land))
 
-# save the deltas to netcdf
+## tmin = avg tas - 0.5*dtr
+brown_tmin_corr <- round(brown_tas_corr - (0.5 * deltas_fineMasked$dtr), 2)
+varnames(brown_tmin_corr) <- "tasmin"
+longnames(brown_tmin_corr) <- "minimum air temperature"
+units(brown_tmin_corr) <- "deg_C"
+time(brown_tmin_corr) <- seq(as.Date("1980-01-16"), by = "month", l = nlyr(brown_tmin_corr))
+brown_tmin_corr
+
+# what do the corrected monthly avg max temps look like?
+panel(tapp(brown_tmin_corr, "month", mean),
+     range = c(5, 35), fill_range = TRUE,
+     main = paste0(month.abb, " corrected tasmin"),
+     col = hcl.colors(100, "spectral", rev = TRUE),
+     fun = function() lines(land))
+
+# Is corrected tmax ever less than tmin?
+dtr_temp_anoms <- app(brown_tmax_corr < brown_tmin_corr, sum)
+dtr_temp_anoms
+
+# save the masked deltas to netcdf
 source("01_code/00_functions/spatraster_to_netcdf.r")
 
-time(deltas_fine$pr, tstep = "months") <- 1:12
-time(deltas_fine$tas, tstep = "months") <- 1:12
-time(deltas_fine$tasmax, tstep = "months") <- 1:12
-time(deltas_fine$tasmin, tstep = "months") <- 1:12
+time(deltas_fineMasked$pr, tstep = "months") <- 1:12
+time(deltas_fineMasked$tas, tstep = "months") <- 1:12
+time(deltas_fineMasked$dtr, tstep = "months") <- 1:12
 
 write_spatraster_ncdf(
-  deltas_fine$pr,
+  deltas_fineMasked$pr,
   "02_data/02_processed/deltas/delta_fine_delta_pr_climatology_ncdf4.nc")
 write_spatraster_ncdf(
-  deltas_fine$tas,
+  deltas_fineMasked$tas,
   "02_data/02_processed/deltas/delta_fine_delta_tas_climatology_ncdf4.nc")
 write_spatraster_ncdf(
-  deltas_fine$tasmax,
-  "02_data/02_processed/deltas/delta_fine_delta_tasmax_climatology_ncdf4.nc")
-write_spatraster_ncdf(
-  deltas_fine$tasmin,
-  "02_data/02_processed/deltas/delta_fine_delta_tasmin_climatology_ncdf4.nc")
+  deltas_fineMasked$dtr,
+  "02_data/02_processed/deltas/delta_fine_delta_dtr_climatology_ncdf4.nc")
