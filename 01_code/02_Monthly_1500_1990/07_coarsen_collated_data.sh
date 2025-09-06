@@ -21,9 +21,9 @@ pr_weights_ann="${output_dir}/coarse_pr_weights_ann.nc"
 tas_weights="${output_dir}/coarse_tas_weights.nc"
 tas_weights_ann="${output_dir}/coarse_tas_weights_ann.nc"
 src_pr="/media/dafcluster4/storage/TraCE_22k_1500CE/out/pr/TraCE_22ka_downscaled_pr_decadal_21k_1500CE_biascorr.nc"
-src_tas="/media/dafcluster4/storage/TraCE_22k_1500CE/out/tas/TraCE_22ka_downscaled_tas_decadal_21k_1500CE_biascorr.nc"
+src_tas="/media/dafcluster4/storage/TraCE_22k_1500CE/out/tasmax/TraCE_22ka_downscaled_tasmax_decadal_21k_1500CE_biascorr.nc"
 src_pr_ann="/media/dafcluster4/storage/TraCE_1500_1990CE/1500_1990/out/pr/TraCE_22ka_downscaled_pr_1500_1990_biascorr.nc"
-src_tas_ann="/media/dafcluster4/storage/TraCE_1500_1990CE/1500_1990/out/tas/TraCE_22ka_downscaled_tas_1500_1990_biascorr.nc"
+src_tas_ann="/media/dafcluster4/storage/TraCE_1500_1990CE/1500_1990/out/tasmax/TraCE_22ka_downscaled_tasmax_1500_1990_biascorr.nc"
 
 # Conservative weights for precipitation
 if [[ ! -f "$pr_weights" ]]; then
@@ -43,7 +43,7 @@ if [[ ! -f "$tas_weights" ]]; then
     cdo -P 100 gencon,"$targetgrid" "$src_tas_ann" "$tas_weights_ann"
 fi
 
-vars=(pr tas tasmax tasmin)
+vars=(pr tasmax tasmin)
 
 for var in "${vars[@]}"; do
     # sums for precipitation, means otherwise
@@ -73,10 +73,10 @@ for var in "${vars[@]}"; do
 
     if [[ -f "$out_dec" ]]; then
         echo "Skipping ${out_dec} (already exists)"
-    else
-        echo "Regridding and then temporally aggregating ${in_dec} -> ${out_dec}"
-        cdo -s -b F32 -P 100 "$op_dec" -remap,"$targetgrid","$wgt" "$in_dec" "$out_dec"
-        ncap2 -O -s 'time=array(1,1,$time); time@units=""' "$out_dec" "$out_dec"
+    # else
+    #     echo "Regridding and then temporally aggregating ${in_dec} -> ${out_dec}"
+    #     cdo -s -b F32 -P 100 "$op_dec" -remap,"$targetgrid","$wgt" "$in_dec" "$out_dec"
+    #     ncap2 -O -s 'time=array(1,1,$time); time@units=""' "$out_dec" "$out_dec"
     fi
 
     if [[ -f "$out_dec2" ]]; then
@@ -88,9 +88,9 @@ for var in "${vars[@]}"; do
 
     if [[ -f "$out_dec3" ]]; then
         echo "Skipping ${out_dec3} (already exists)"
-    else
-        echo "Regridding ${in_dec} -> ${out_dec3}"
-        cdo -s -b F32 -P 100 "$op_dec3" -remap,"$targetgrid","$wgt" "$in_dec" "$out_dec3"
+    # else
+    #     echo "Regridding ${in_dec} -> ${out_dec3}"
+    #     cdo -s -b F32 -P 100 "$op_dec3" -remap,"$targetgrid","$wgt" "$in_dec" "$out_dec3"
     fi
 
     # TraCE_1500_1990CE annual steps
@@ -100,9 +100,9 @@ for var in "${vars[@]}"; do
 
     if [[ -f "$out_yr" ]]; then
         echo "Skipping ${out_yr} (already exists)"
-    else
-        echo "Regridding and then temporally aggregating ${in_yr} -> ${out_yr}"
-        cdo -s -b F32 -P 100 "$op_yr" -remap,"$targetgrid","$wgt_ann" "$in_yr" "$out_yr"
+    # else
+    #     echo "Regridding and then temporally aggregating ${in_yr} -> ${out_yr}"
+    #     cdo -s -b F32 -P 100 "$op_yr" -remap,"$targetgrid","$wgt_ann" "$in_yr" "$out_yr"
     fi
 
     if [[ -f "$out_yr2" ]]; then
@@ -113,4 +113,30 @@ for var in "${vars[@]}"; do
     fi
 done
 
-# 
+# split the decadal data into 12 files 
+split_num=2155
+base_dir="/media/dafcluster4/storage/TraCE_22k_1500CE/out"
+vars=(pr tasmax tasmin)
+
+for var in "${vars[@]}"; do
+    infile="${base_dir}/${var}/TraCE_22ka_downscaled_${var}_decadal_21k_1500CE_biascorr.nc"
+    outfile="${base_dir}/${var}/TraCE_22ka_downscaled_${var}_decadal_21k_1500CE_biascorr_"
+    ncks --4 -O "$infile" "$infile"
+    echo "Splitting $var ..."
+    cdo -f nc4 -P 100 -L -splitsel,${split_num} "$infile" "$outfile"
+done
+
+# Wait for all background jobs to finish
+wait
+echo "All splits completed."
+
+conda deactivate
+
+# Now pass the files through the R script to correct the time-index
+for var in "${vars[@]}"; do
+    files=$(ls ${base_dir}/${var}/*.nc | grep -v "biascorr\\.nc$")
+    for f in $files; do
+        echo "Processing $f"
+        Rscript /home/dafcluster4/Documents/GitHub/TraCE_Sahul/01_code/01_Decadal_pre1500/06_split_and_add_timedims.R "$f"
+    done
+done

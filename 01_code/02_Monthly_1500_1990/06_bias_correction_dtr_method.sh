@@ -155,7 +155,7 @@ for var in "${variables[@]}"; do
         # pack once bias corrected
         output_file="$input_base/$var/TraCE_22ka_downscaled_${var}_1500_1990_biascorr.nc"
         echo "Copying and packing bias corrected files to $(basename ${output_file})"
-        cdo -O -P 100 -L -w -s pack "$tmp_biascorr" "$output_file"
+        cdo -f nc4 -O -P 100 -L -w -s pack "$tmp_biascorr" "$output_file"
         # delete temp files
         rm -rf "$tmp_unpacked" "$tmp_delta" "$tmp_biascorr" "$grid_desc"
     fi

@@ -17,6 +17,9 @@ land <- land[land$ADMIN == "Australia", ]
 land <- aggregate(land)
 plot(land)
 
+# days in month
+dmon <- c(31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
+
 plot_avg <- FALSE
 
 # read in our downscaled data
@@ -31,40 +34,45 @@ brown <- pblapply(brown, function(x) {
   r
 })
 brown <- sds(brown)
-names(brown) <- c("pr", "tas", "tasmax", "tasmin")
+names(brown) <- c("pr", "tasmax", "tasmin")
 time(brown) <- seq(as.Date("1900-01-16"), by = "month", l = nlyr(brown$pr))
 brown
 
 # load in AGCD and project to area
 source("01_code/00_functions/agcd_proc.R")
-agcd <- pblapply(c("precip", "tmin", "tmax"), agcd_proc,
+agcd <- pblapply(c("precip", "tmax", "tmin"), agcd_proc,
                dir = "/mnt/Data/AusClim/data/raw/agcd",
                template = brown$pr[[1]], years = 1910:1989,
                proj_method = "average", type = ".nc$")
 
-names(agcd) <- c("pr", "tasmin", "tasmax")
-agcd$tas <- ((agcd$tasmax + agcd$tasmin)*0.5)*1
+names(agcd) <- c("pr", "tasmax", "tasmin")
 names(agcd$pr) <- paste0("pr_", 1:nlyr(agcd$pr))
-names(agcd$tasmin) <- paste0("tasmin_", 1:nlyr(agcd$pr))
 names(agcd$tasmax) <- paste0("tasmax_", 1:nlyr(agcd$pr))
-names(agcd$tas) <- paste0("tas_", 1:nlyr(agcd$pr))
+names(agcd$tasmin) <- paste0("tasmin_", 1:nlyr(agcd$pr))
+agcd$pr <- setValues(agcd$pr, values(agcd$pr)/(86400 * dmon))
+units(agcd$pr) <- units(brown$pr)[1]
+time(agcd$pr) <- time(agcd$tasmax) <- time(agcd$tasmin) <- 
+ seq(as.Date("1910-01-16"), by = "month", l = nlyr(agcd$pr))
 agcd
 
 # Load in CHELSA baseline data
-chelsa_12 <- list.files("02_data/02_processed/CHELSA",
-                        pattern = "V.1.2.tif$",
-                        full.names = TRUE,
-                        recursive = FALSE)
-vars <- sapply(chelsa_12, function(x) sub(".*CHELSA_([a-z]+)_.*", "\\1", basename(x)))
-chelsa_baseline <- split(chelsa_12, vars) |>
-  pblapply(function(x) {
-    r <- project(rast(x), brown$pr, method = "average", use_gdal = TRUE, threads = TRUE)
-    time(r) <- seq(as.Date("1980-01-16"), by = "month", l = nlyr(r))
-    r
-  })
-chelsa_baseline$pr <- chelsa_baseline$pr * (86400*c(31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31))
-units(chelsa_baseline$pr) <- "mm/month"
-chelsa_baseline
+source("01_code/00_functions/chelsa_proc.R")
+chelsa_12 <- lapply(c("prec", "tmax", "tmin"),
+  FUN = chelsa_proc,
+  mask = NULL,
+  ymin = 1980, ymax = 1989,
+  tras_ext = ext(105.0, 161.25, -52.5, 11.25),
+  load_exist = TRUE,
+  dir = "/mnt/Data/CHELSA/v1.2",
+  outdir = "02_data/02_processed/CHELSA",
+  cores = 5L)
+chelsa_12 <- pblapply(chelsa_12, function(i) {
+  r <- project(rast(i), brown$pr, method = "average", use_gdal = TRUE, threads = TRUE)
+  time(r) <- seq(as.Date("1980-01-16"), by = "month", l = nlyr(r))
+  r
+})
+names(chelsa_12) <- c("pr", "tasmax", "tasmin")
+chelsa_12
 
 # Read in the CHELSA-TraCE21k data for 1900-1989
 chelsa_lut <- data.table(ID = 1:221,
@@ -88,16 +96,15 @@ chelsa_trace <- list(pr = rast(chelsa_fil[1:12], win = ext(land)),
 chelsa_trace <- pblapply(chelsa_trace, function(i) {
   return(project(i, brown$pr[[1]], method = "average", use_gdal = TRUE, threads = TRUE))
 })
-
+chelsa_trace
 # convert tasmax and tasmin to deg_C
 chelsa_trace$tasmax <- (chelsa_trace$tasmax*0.1)-273.15
 chelsa_trace$tasmin <- (chelsa_trace$tasmin*0.1)-273.15
+chelsa_trace$pr <- chelsa_trace$pr/(86400 * dmon)
 units(chelsa_trace$tasmax) <- units(chelsa_trace$tasmin) <- "deg_C"
-chelsa_trace$tas <- (chelsa_trace$tasmax + chelsa_trace$tasmin) * 0.5
-units(chelsa_trace$tas) <- "deg_C"
+units(chelsa_trace$pr) <- units(brown$pr)[1]
 time(chelsa_trace$pr) <- time(chelsa_trace$tasmax) <-
-  time(chelsa_trace$tasmin) <- time(chelsa_trace$tas) <-
-  seq(as.Date("1950-01-16"), by = "month", l = 12)
+  time(chelsa_trace$tasmin) <- seq(as.Date("1950-01-16"), by = "month", l = 12)
 chelsa_trace
 
 # Load in Koppen climate zones
@@ -112,110 +119,75 @@ levels(koppen) <- kd
 koppen
 plot(koppen)
 
-# monthly climatological averages
-brown_1910_1989_m <- pblapply(seq_along(brown), function(sd) {
-  rsd <- brown[[sd]]
-  rsd <- rsd[[which(format(time(rsd), "%Y") >= 1910)]]
-  rsd <- tapp(rsd, "months", "mean")
-  units(rsd) <- units(brown[[sd]])[1]
-  if (units(brown[[sd]])[1] %in% c("K", "k", "kelvin")) {
-    rsd <- setValues(rsd, values(rsd) - 273.15)
-    units(rsd) <- "deg_C"
+# Compute areal averages across zones, or across the entire Sahul area
+get_summary_stats <- function(r, timevec, varname, koppen = NULL) {
+  if (is.null(koppen)) {
+    means <- global(r, "mean", na.rm = TRUE)[,1]
+    sds <- global(r, "sd", na.rm = TRUE)[,1]
+    return(data.table(time = timevec, mean = means, sd = sds, variable = varname))
+  } else {
+    zones <- unique(values(koppen))  # extract unique values from the raster
+    zones <- zones[!is.na(zones)]     # remove NA if present
+    koppen_summary <- pblapply(zones, function(zone) {
+      zone_mask <- ifel(koppen == zone, koppen, NA)
+      r_masked <- mask(r, zone_mask)
+      means <- global(r_masked, "mean", na.rm = TRUE)[,1]
+      sds <- global(r_masked, "sd", na.rm = TRUE)[,1]
+      return(data.table(time = timevec, mean = means, sd = sds, variable = varname, zone = zone))
+    })
+    dt <- rbindlist(koppen_summary)
+    category_df <- cats(koppen)[[1]]
+    dt <- merge(dt, category_df, by.x = "zone", by.y = "id", all.x = TRUE)
+    setcolorder(dt, c("time", "mean", "sd", "variable", "Koppen", "zone"))
+    return(dt)
   }
-  varnames(rsd) <- varnames(brown[[sd]])[1]
-  names(rsd) <- paste0(month.abb, "_", varnames(brown[[sd]])[1])
-  time(rsd, tstep = "months") <- seq(as.Date("1950-01-16"), by = "month", l = 12)
-  crs(rsd) <- "EPSG:4326"
-  rsd
-})
-brown_1910_1989_m <- rast(brown_1910_1989_m)
-brown_1910_1989_m
+}
 
-brown_1980_1989_m <- pblapply(seq_along(brown), function(sd) {
-  rsd <- brown[[sd]]
-  rsd <- rsd[[which(format(time(rsd), "%Y") >= 1980)]]
-  rsd <- tapp(rsd, "months", "mean")
-  units(rsd) <- units(brown[[sd]])[1]
-  if (units(brown[[sd]])[1] %in% c("K", "k", "kelvin")) {
-    rsd <- setValues(rsd, values(rsd) - 273.15)
-    units(rsd) <- "deg_C"
-  }
-  varnames(rsd) <- varnames(brown[[sd]])[1]
-  names(rsd) <- paste0(month.abb, "_", varnames(brown[[sd]])[1])
-  time(rsd, tstep = "months") <- seq(as.Date("1985-01-16"), by = "month", l = 12)
-  crs(rsd) <- "EPSG:4326"
-  rsd
-})
-brown_1980_1989_m <- rast(brown_1980_1989_m)
-brown_1980_1989_m
+zseq <- time(brown$pr)
+brown_summary <- rbindlist(lapply(seq_along(brown), function(i) {
+  get_summary_stats(r = brown[[i]], timevec = zseq, varname = names(brown)[i], koppen)
+}))
+brown_summary[, Model := "Brown"]
+brown_summary
 
-agcd_1910_1989_m <- pblapply(seq_along(agcd), function(sd) {
-  rsd <- agcd[[sd]]
-  rsd <- rsd[[which(format(time(rsd), "%Y") >= 1910)]]
-  rsd <- tapp(rsd, "months", "mean")
-  units(rsd) <- c("mm/month", "deg_C", "deg_C", "deg_C")[sd]
-  varnames(rsd) <- c("pr", "tasmin", "tasmax", "tas")[sd]
-  names(rsd) <- paste0(month.abb, "_", c("pr", "tasmin", "tasmax", "tas")[sd])
-  time(rsd, tstep = "months") <- seq(as.Date("1950-01-16"), by = "month", l = 12)
-  crs(rsd) <- "EPSG:4326"
-  rsd
-})
-agcd_1910_1989_m <- rast(agcd_1910_1989_m)
-agcd_1910_1989_m
+zseq <- time(agcd$pr)
+agcd_summary <- rbindlist(lapply(seq_along(agcd), function(i) {
+  get_summary_stats(r = agcd[[i]], timevec = zseq, varname = names(agcd)[i], koppen)
+}))
+agcd_summary[, Model := "BoM"]
+agcd_summary
 
-agcd_1980_1989_m <- pblapply(seq_along(agcd), function(sd) {
-  rsd <- agcd[[sd]]
-  rsd <- rsd[[which(format(time(rsd), "%Y") >= 1980)]]
-  rsd <- tapp(rsd, "months", "mean")
-  units(rsd) <- c("mm/month", "deg_C", "deg_C", "deg_C")[sd]
-  varnames(rsd) <- c("pr", "tasmin", "tasmax", "tas")[sd]
-  names(rsd) <- paste0(month.abb, "_", c("pr", "tasmin", "tasmax", "tas")[sd])
-  time(rsd, tstep = "months") <- seq(as.Date("1985-01-16"), by = "month", l = 12)
-  crs(rsd) <- "EPSG:4326"
-  rsd
-})
-agcd_1980_1989_m <- rast(agcd_1980_1989_m)
-agcd_1980_1989_m
+zseq <- time(chelsa_12$pr)
+chelsa_summary <- rbindlist(lapply(seq_along(chelsa_12), function(i) {
+  get_summary_stats(r = chelsa_12[[i]], timevec = zseq, varname = names(chelsa_12)[i], koppen)
+}))
+chelsa_summary[, Model := "CHELSA"]
+chelsa_summary
 
-CHELSA_1980_1989_m <- pblapply(seq_along(chelsa_baseline), function(sd) {
-  rsd <- chelsa_baseline[[sd]]
-  rsd <- tapp(rsd, "months", "mean")
-  units(rsd) <- c("mm/month", "deg_C", "deg_C", "deg_C")[sd]
-  varnames(rsd) <- c("pr", "tas", "tasmax", "tasmin")[sd]
-  names(rsd) <- paste0(month.abb, "_", c("pr", "tas", "tasmax", "tasmin")[sd])
-  time(rsd, tstep = "months") <- seq(as.Date("1985-01-16"), by = "month", l = 12)
-  crs(rsd) <- "EPSG:4326"
-  rsd
-})
-CHELSA_1980_1989_m <- rast(CHELSA_1980_1989_m)
-CHELSA_1980_1989_m
+zseq <- time(chelsa_trace$pr)
+chelsaTrace_summary <- rbindlist(lapply(seq_along(chelsa_trace), function(i) {
+  get_summary_stats(r = chelsa_trace[[i]], timevec = zseq, varname = names(chelsa_trace)[i], koppen)
+}))
+chelsaTrace_summary[, Model := "Karger"]
+chelsaTrace_summary
 
-CHELSA_Trace21_1950_m <- pblapply(seq_along(chelsa_trace), function(sd) {
-  rsd <- chelsa_trace[[sd]]
-  rsd <- tapp(rsd, "months", "mean")
-  units(rsd) <- c("mm/month", "deg_C", "deg_C", "deg_C")[sd]
-  varnames(rsd) <- c("pr", "tasmax", "tasmin", "tas")[sd]
-  names(rsd) <- paste0(month.abb, "_", c("pr", "tasmax", "tasmin", "tas")[sd])
-  time(rsd, tstep = "months") <- seq(as.Date("1950-01-16"), by = "month", l = 12)
-  crs(rsd) <- "EPSG:4326"
-  rsd
-})
-CHELSA_Trace21_1950_m <- rast(CHELSA_Trace21_1950_m)
-CHELSA_Trace21_1950_m
+dt_summary <- rbindlist(list(brown_summary, agcd_summary, chelsa_summary, chelsaTrace_summary))
+dt_summary
 
-# save each raster
-writeRaster(brown_1910_1989_m,
-            filename = "03_comparisons/brown_1910_1989_monthly.tif")
-writeRaster(brown_1980_1989_m,
-            filename = "03_comparisons/brown_1980_1989_monthly.tif")
-writeRaster(agcd_1910_1989_m,
-            filename = "03_comparisons/agcd_1910_1989_monthly.tif")
-writeRaster(agcd_1980_1989_m,
-            filename = "03_comparisons/agcd_1980_1989_monthly.tif")
-writeRaster(CHELSA_1980_1989_m,
-            filename = "03_comparisons/CHELSA_1980_1989_monthly.tif")
-writeRaster(CHELSA_Trace21_1950_m,
-            filename = "03_comparisons/CHELSA_Trace21_1950_monthly.tif")
+saveRDS(dt_summary, "03_comparisons/koppen_comparisons_contemporary.RDS")
+
+dt_summary[, Year := as.integer(format(dt_summary[["time"]], "%Y"))]
+dt_summary
+dt_avg <- copy(dt_summary)[, .(mean = mean(mean), sd = mean(sd)), by = c("Year", "variable", "Koppen", "Model")]
+dt_avg
+ggplot(dt_avg[variable == "tasmin", ],
+       aes(x = Year, y = mean, color = Model, fill = Model)) +
+  facet_wrap(~ Koppen, scales = "free_y") +
+  geom_line() +
+  geom_ribbon(aes(ymin = mean - sd, ymax = mean + sd), alpha = 0.2, color = NA) +
+  labs(title = "Regional Mean and Variability Over Time (Sahul)", x = "Year (CE)", y = "Value") +
+  scale_x_continuous() +
+  theme_minimal()
 
 # iterate through each dataset and extract monthly averages and SD for each zone
 source("01_code/00_functions/koppen_summary.R")

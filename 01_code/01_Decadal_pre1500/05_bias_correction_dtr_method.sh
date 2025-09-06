@@ -36,10 +36,10 @@ conda deactivate || true
 conda activate nco_stable
 
 # Colours
-RED="\033[38;5;196m"     # ~ #e41a1c
-BLUE="\033[38;5;33m"     # ~ #377eb8
-YELLOW="\033[38;5;226m"  # ~ #ffff33
-GREEN="\033[38;5;34m"    # ~ #4daf4a
+RED="\033[38;5;196m"
+BLUE="\033[38;5;33m"
+YELLOW="\033[38;5;226m"
+GREEN="\033[38;5;34m"
 RESET="\033[0m"
 
 input_base="/media/dafcluster4/storage/TraCE_22k_1500CE/chunk_out"
@@ -158,8 +158,8 @@ for chunk_dir in "${input_base}"/[0-9][0-9][0-9][0-9][0-9]_[0-9][0-9][0-9][0-9][
                 -a standard_name,tasmin,o,c,"minimum_air_temperature" \
                 "$tmp_biascorr_tasmin"
             # dont pack, but copy
-            cdo -O -P 100 -L -w -s copy "$tmp_biascorr_tasmax" "$output_tasmax"
-            cdo -O -P 100 -L -w -s copy "$tmp_biascorr_tasmin" "$output_tasmin"
+            cdo -f nc4 -O -P 100 -L -w -s copy "$tmp_biascorr_tasmax" "$output_tasmax"
+            cdo -f nc4 -O -P 100 -L -w -s copy "$tmp_biascorr_tasmin" "$output_tasmin"
             # cleanup
             rm -f "$tmp_unpacked_tasmax" "$tmp_unpacked_tasmin" "$tmp_unpacked_tas" \
                 "$tmp_delta_tas" "$tmp_delta_dtr" "$tmp_biascorr" "$tmp_dtr" \
@@ -200,7 +200,7 @@ for chunk_dir in "${input_base}"/[0-9][0-9][0-9][0-9][0-9]_[0-9][0-9][0-9][0-9][
                 "$tmp_biascorr"
             # don't pack, but make a copy
             output_file="${out_dir}/${var}/CHELSA_${var}_${chunk_name}_concat_biascorr.nc"
-            cdo -O -P 100 -L -s -w copy "$tmp_biascorr" "$output_file"
+            cdo -f nc4 -O -P 100 -L -s -w copy "$tmp_biascorr" "$output_file"
             # delete temp files
             rm -rf "$tmp_unpacked" "$tmp_delta" "$tmp_biascorr" "$grid_desc"
         fi
@@ -221,16 +221,16 @@ for var in "${variables[@]}"; do
     # store input order for debugging
     find "${input_base}"/*/out/"${var}" -type f -name '*biascorr.nc' | sort -V >"${out_dir}/${var}_concat_input_order.txt"
     # concat with CDO
-    cdo -P 100 -L -s -O \
+    cdo -f nc4 -P 100 -L -s -O \
         -cat -unpack \
         $(find "${input_base}"/*/out/"${var}" -type f -name '*biascorr.nc' | sort -V) \
         "${tmp_outvar}"
     # set time to 1...n with ncap2
     echo -e "${GREEN}Resetting time dimension...${RESET}"
-    ncap2 -O -s 'time=array(1,1,$time); time@units=""' "${tmp_outvar}" "${tmp_outvar}"
+    ncap2 --4 -O -s 'time=array(1,1,$time); time@units=""' "${tmp_outvar}" "${tmp_outvar}"
     # compress output
     echo -e "${GREEN}Packing output file...${RESET}"
-    cdo -s -L -O -P 100 pack "${tmp_outvar}" "${outfile}"
+    cdo -f nc4 -s -L -O -P 100 pack "${tmp_outvar}" "${outfile}"
     rm -f "${tmp_outvar}"
     echo -e "${YELLOW}Finished variable: ${var}${RESET}"
 done
