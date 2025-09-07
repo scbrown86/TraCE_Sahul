@@ -112,31 +112,3 @@ for var in "${vars[@]}"; do
         cdo -s -b F32 -P 100 "$op_yr" "$in_yr" "$out_yr2"
     fi
 done
-
-# split the decadal data into 12 files 
-split_num=2155
-base_dir="/media/dafcluster4/storage/TraCE_22k_1500CE/out"
-vars=(pr tasmax tasmin)
-
-for var in "${vars[@]}"; do
-    infile="${base_dir}/${var}/TraCE_22ka_downscaled_${var}_decadal_21k_1500CE_biascorr.nc"
-    outfile="${base_dir}/${var}/TraCE_22ka_downscaled_${var}_decadal_21k_1500CE_biascorr_"
-    ncks --4 -O "$infile" "$infile"
-    echo "Splitting $var ..."
-    cdo -f nc4 -P 100 -L -splitsel,${split_num} "$infile" "$outfile"
-done
-
-# Wait for all background jobs to finish
-wait
-echo "All splits completed."
-
-conda deactivate
-
-# Now pass the files through the R script to correct the time-index
-for var in "${vars[@]}"; do
-    files=$(ls ${base_dir}/${var}/*.nc | grep -v "biascorr\\.nc$")
-    for f in $files; do
-        echo "Processing $f"
-        Rscript /home/dafcluster4/Documents/GitHub/TraCE_Sahul/01_code/01_Decadal_pre1500/06_split_and_add_timedims.R "$f"
-    done
-done

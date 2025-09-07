@@ -227,10 +227,37 @@ for var in "${variables[@]}"; do
         "${tmp_outvar}"
     # set time to 1...n with ncap2
     echo -e "${GREEN}Resetting time dimension...${RESET}"
-    ncap2 --4 -O -s 'time=array(1,1,$time); time@units=""' "${tmp_outvar}" "${tmp_outvar}"
+    ncap2 --4 -O -s 'time=array(1.0f,1.0f,$time); time@units=""' "${tmp_outvar}" "${tmp_outvar}"
     # compress output
     echo -e "${GREEN}Packing output file...${RESET}"
     cdo -f nc4 -s -L -O -P 100 pack "${tmp_outvar}" "${outfile}"
     rm -f "${tmp_outvar}"
     echo -e "${YELLOW}Finished variable: ${var}${RESET}"
+done
+
+# split the decadal data into 12 files 
+split_num=2155
+base_dir="/media/dafcluster4/storage/TraCE_22k_1500CE/out"
+vars=(pr tasmax tasmin)
+
+for var in "${vars[@]}"; do
+    infile="${base_dir}/${var}/TraCE_22ka_downscaled_${var}_decadal_21k_1500CE_biascorr.nc"
+    outfile="${base_dir}/${var}/TraCE_22ka_downscaled_${var}_decadal_21k_1500CE_biascorr_"
+    echo -e "${YELLOW}Changing time index to float, for $var...${RESET}"
+    ncap2 -O -s 'time=float(time)' "$infile" "$infile" # make sure time is float
+    echo -e "${GREEN}   Splitting $var...${RESET}"
+    cdo -f nc4 -P 100 -L -splitsel,${split_num} "$infile" "$outfile"
+done
+
+# Now pass the split files through the R script to correct the time-index
+conda deactivate # need to deactivate the nco_stable env to use R
+for var in "${vars[@]}"; do
+    echo -e "${GREEN}Processing $var...${RESET}"
+    files=$(ls ${base_dir}/${var}/*.nc | grep -v "biascorr\\.nc$")
+    for f in $files; do
+        echo -e "${YELLOW} Processing $(basename "$f")...${RESET}"
+        Rscript /home/dafcluster4/Documents/GitHub/TraCE_Sahul/01_code/01_Decadal_pre1500/06_split_and_add_timedims.R "$f"
+        echo -e "${YELLOW} Finished $(basename "$f")...${RESET}"
+    done
+    echo -e "${GREEN}Finished $var...${RESET}"
 done
