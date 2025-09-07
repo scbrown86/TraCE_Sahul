@@ -8,6 +8,13 @@
 # '02_Monthly_1500_1990/05_process_CHELSA_climatology.R' before proceeding.
 # ================================================================================
 
+# Colours
+RED="\033[38;5;196m"
+BLUE="\033[38;5;33m"
+YELLOW="\033[38;5;226m"
+GREEN="\033[38;5;34m"
+RESET="\033[0m"
+
 # List of required delta files
 required_delta_files=(
     "/home/dafcluster4/Documents/GitHub/TraCE_Sahul/02_data/02_processed/deltas/delta_fine_delta_pr_climatology_ncdf4.nc"
@@ -17,12 +24,12 @@ required_delta_files=(
 # Check that delta files exist or exit.
 for file in "${required_delta_files[@]}"; do
     if [[ ! -f "$file" ]]; then
-        echo "ERROR: Required file not found: $file"
+        echo -e "${RED}ERROR: Required file not found: $(basename $file)${RESET}"
         echo ""
-        echo "IMPORTANT:"
-        echo "Monthly data downscaling must be completed before bias-correcting the decadal data!"
-        echo "Run all scripts up to and including:"
-        echo "'02_Monthly_1500_1990/05_process_CHELSA_climatology.R' before proceeding."
+        echo -e "${YELLOW}IMPORTANT:${RESET}"
+        echo -e "${YELLOW}Monthly data downscaling must be completed before bias-correcting the decadal data! ${RESET}"
+        echo -e "${YELLOW}Run all scripts up to and including:${RESET}"
+        echo -e "${YELLOW}'02_Monthly_1500_1990/05_process_CHELSA_climatology.R' before proceeding.${RESET}"
         exit 1
     fi
 done
@@ -34,13 +41,6 @@ cd "/media/dafcluster4/storage/TraCE_22k_1500CE/" || {
 
 conda deactivate || true
 conda activate nco_stable
-
-# Colours
-RED="\033[38;5;196m"
-BLUE="\033[38;5;33m"
-YELLOW="\033[38;5;226m"
-GREEN="\033[38;5;34m"
-RESET="\033[0m"
 
 input_base="/media/dafcluster4/storage/TraCE_22k_1500CE/chunk_out"
 delta_base="/home/dafcluster4/Documents/GitHub/TraCE_Sahul/02_data/02_processed/deltas"
@@ -222,17 +222,17 @@ for var in "${variables[@]}"; do
     find "${input_base}"/*/out/"${var}" -type f -name '*biascorr.nc' | sort -V >"${out_dir}/${var}_concat_input_order.txt"
     # concat with CDO
     cdo -f nc4 -P 100 -L -s -O \
-        -cat -unpack \
+        -cat \
         $(find "${input_base}"/*/out/"${var}" -type f -name '*biascorr.nc' | sort -V) \
         "${tmp_outvar}"
     # set time to 1...n with ncap2
-    echo -e "${GREEN}Resetting time dimension...${RESET}"
+    echo -e "       ${YELLOW}Resetting time dimension...${RESET}"
     ncap2 --4 -O -s 'time=array(1.0f,1.0f,$time); time@units=""' "${tmp_outvar}" "${tmp_outvar}"
     # compress output
-    echo -e "${GREEN}Packing output file...${RESET}"
+    echo -e "       ${YELLOW}Packing output file...${RESET}"
     cdo -f nc4 -s -L -O -P 100 pack "${tmp_outvar}" "${outfile}"
     rm -f "${tmp_outvar}"
-    echo -e "${YELLOW}Finished variable: ${var}${RESET}"
+    echo -e "${GREEN}Finished variable: ${var}${RESET}"
 done
 
 # split the decadal data into 12 files 
@@ -243,9 +243,9 @@ vars=(pr tasmax tasmin)
 for var in "${vars[@]}"; do
     infile="${base_dir}/${var}/TraCE_22ka_downscaled_${var}_decadal_21k_1500CE_biascorr.nc"
     outfile="${base_dir}/${var}/TraCE_22ka_downscaled_${var}_decadal_21k_1500CE_biascorr_"
-    echo -e "${YELLOW}Changing time index to float, for $var...${RESET}"
-    ncap2 -O -s 'time=float(time)' "$infile" "$infile" # make sure time is float
-    echo -e "${GREEN}   Splitting $var...${RESET}"
+    # echo -e "${YELLOW}Changing time index to float, for $var...${RESET}"
+    # ncap2 -O -s 'time=float(time)' "$infile" "$infile" # make sure time is float
+    echo -e "${GREEN}Splitting $var...${RESET}"
     cdo -f nc4 -P 100 -L -splitsel,${split_num} "$infile" "$outfile"
 done
 
