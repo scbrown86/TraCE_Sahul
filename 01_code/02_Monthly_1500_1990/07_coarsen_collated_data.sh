@@ -50,9 +50,9 @@ for var in "${vars[@]}"; do
     if [[ $var == "pr" ]]; then
         export CDO_REMAP_NORM="destarea"
         export REMAP_AREA_MIN=0.10
-        op_dec="timselsum,120" # Centennial sums (120 steps = 10 decades =  1 century). 2155 decades = 215.5 centuries, last "century" is only 50 years.
-        op_dec3="timselsum,12" # decadal sum. Each 12 steps (months) is decadal average of those months. Sum/Avg 12 "months" to get decadal total/sum
-        op_yr="yearsum"        # annual sums
+        op_dec="timselmean,120" # Centennial sums (120 steps = 10 decades =  1 century). 2155 decades = 215.5 centuries, last "century" is only 50 years.
+        op_dec3="timselmean,12" # decadal sum. Each 12 steps (months) is decadal average of those months. Sum/Avg 12 "months" to get decadal total/sum
+        op_yr="yearmean"        # annual sums
         wgt="$pr_weights"
         wgt_ann="$pr_weights_ann"
     else

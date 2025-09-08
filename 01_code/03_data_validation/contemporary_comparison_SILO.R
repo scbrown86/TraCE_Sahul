@@ -8,8 +8,8 @@ library(ggplot2)
 library(qpdf)
 library(plotrix)
 
-setGDALconfig("GDAL_PAM_ENABLED", "FALSE")
-terraOptions(memfrac = 0.85, memmax = 50)
+# setGDALconfig("GDAL_PAM_ENABLED", "TRUE")
+# terraOptions(memfrac = 0.85, memmax = 50)
 
 land <- vect(rnaturalearthhires::countries10)
 land <- crop(land, ext(106, 155, -50, 7))
@@ -21,25 +21,21 @@ plot(land)
 dmon <- c(31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
 plot_avg <- FALSE
 
-# source the SILO data
-source("01_code/00_functions/silo_dl.R")
-
-year_vec <- 1900:1989
-# Download the data from SILO as netcdf files
-## n.b. will overwrite any files already downloaded
-silo_dl(years_vec = year_vec,
-        variable = "monthly_rain",
-        dir = "/mnt/Data/SILO/PREC")
-silo_dl(years_vec = year_vec,
-        variable = "max_temp",
-        dir = "/mnt/Data/SILO/TASMAX")
-silo_dl(years_vec = year_vec,
-        variable = "min_temp",
-        dir = "/mnt/Data/SILO/TASMIN")
-
-
-
-
+# # source the SILO data
+# source("01_code/00_functions/silo_dl.R")
+#
+# year_vec <- 1900:1989
+# # Download the data from SILO as netcdf files
+# ## n.b. will overwrite any files already downloaded
+# silo_dl(years_vec = year_vec,
+#         variable = "monthly_rain",
+#         dir = "/mnt/Data/SILO/PREC")
+# silo_dl(years_vec = year_vec,
+#         variable = "max_temp",
+#         dir = "/mnt/Data/SILO/TASMAX")
+# silo_dl(years_vec = year_vec,
+#         variable = "min_temp",
+#         dir = "/mnt/Data/SILO/TASMIN")
 
 # read in our downscaled data
 brown <- list.files(path = "/media/dafcluster4/storage/TraCE_1500_1990CE/1500_1990/out",
@@ -57,22 +53,22 @@ names(brown) <- c("pr", "tasmax", "tasmin")
 time(brown) <- seq(as.Date("1900-01-16"), by = "month", l = nlyr(brown$pr))
 brown
 
-# load in AGCD and project to area
-source("01_code/00_functions/agcd_proc.R")
-agcd <- pblapply(c("precip", "tmax", "tmin"), agcd_proc,
-               dir = "/mnt/Data/AusClim/data/raw/agcd",
-               template = brown$pr[[1]], years = 1910:1989,
-               proj_method = "average", type = ".nc$")
-
-names(agcd) <- c("pr", "tasmax", "tasmin")
-names(agcd$pr) <- paste0("pr_", 1:nlyr(agcd$pr))
-names(agcd$tasmax) <- paste0("tasmax_", 1:nlyr(agcd$pr))
-names(agcd$tasmin) <- paste0("tasmin_", 1:nlyr(agcd$pr))
-agcd$pr <- setValues(agcd$pr, values(agcd$pr)/(86400 * dmon))
-units(agcd$pr) <- units(brown$pr)[1]
-time(agcd$pr) <- time(agcd$tasmax) <- time(agcd$tasmin) <-
- seq(as.Date("1910-01-16"), by = "month", l = nlyr(agcd$pr))
-agcd
+# load in SILO
+silo <- list.files("/mnt/Data/SILO",
+                   "remap",
+                   full.names = TRUE,
+                   recursive = TRUE)
+silo
+silo <- pblapply(silo, function(x) {
+  r <- rast(x, win = ext(land), snap = "out")
+  time(r) <- seq(as.Date("1900-01-16"), by = "month", l = nlyr(r))
+  r
+})
+names(silo) <- c("pr", "tasmax", "tasmin")
+silo$pr <- setValues(silo$pr, values(silo$pr)/(86400 * dmon))
+silo <- sds(silo)
+time(silo) <- seq(as.Date("1900-01-16"), by = "month", l = nlyr(silo$pr))
+silo
 
 # Load in CHELSA baseline data
 source("01_code/00_functions/chelsa_proc.R")
@@ -86,7 +82,7 @@ chelsa_12 <- lapply(c("prec", "tmax", "tmin"),
   outdir = "02_data/02_processed/CHELSA",
   cores = 5L)
 chelsa_12 <- pblapply(chelsa_12, function(i) {
-  r <- project(rast(i), brown$pr, method = "average", use_gdal = TRUE, threads = TRUE)
+  r <- project(rast(i), brown$pr, method = "bilinear", use_gdal = TRUE, threads = TRUE)
   time(r) <- seq(as.Date("1980-01-16"), by = "month", l = nlyr(r))
   r
 })
@@ -113,7 +109,7 @@ chelsa_trace <- list(pr = rast(chelsa_fil[1:12], win = ext(land)),
                      tasmax = rast(chelsa_fil[13:24], win = ext(land)),
                      tasmin = rast(chelsa_fil[25:36], win = ext(land)))
 chelsa_trace <- pblapply(chelsa_trace, function(i) {
-  return(project(i, brown$pr[[1]], method = "average", use_gdal = TRUE, threads = TRUE))
+  return(project(i, brown$pr[[1]], method = "bilinear", use_gdal = TRUE, threads = TRUE))
 })
 chelsa_trace
 # convert tasmax and tasmin to deg_C
@@ -127,16 +123,26 @@ time(chelsa_trace$pr) <- time(chelsa_trace$tasmax) <-
 chelsa_trace
 
 # Load in Koppen climate zones
-koppen <- rast("02_data/01_inputs/koppen_zones_raster.tif")
-koppen <- project(koppen, brown$pr, method = "near")
-koppen <- mask(koppen, project(land, koppen), touches = TRUE)
-has.colors(koppen)
-kd <- data.frame(id = 1:6,
-                 Koppen = c("Temperate", "Grassland", "Desert",
-                            "Subtropical", "Tropical", "Equatorial"))
-levels(koppen) <- kd
+koppen <- rast("02_data/01_inputs/koppen_sahul.tif")
 koppen
-plot(koppen)
+plot(koppen$major_desc, fun = function() lines(land))
+# koppen <- aggregate(koppen, fact = 5, fun = "modal", na.rm = TRUE)
+# koppen <- disagg(koppen, fact = 5, method = "near")
+# plot(koppen$major_desc, fun = function() lines(land))
+koppen <- mask(project(koppen, brown$pr, method = "mode"),
+               land, touches = TRUE)
+plot(koppen$major_desc, fun = function() lines(land))
+
+# koppen <- rast("02_data/01_inputs/koppen_zones_raster.tif")
+# koppen <- project(koppen, brown$pr, method = "near")
+# koppen <- mask(koppen, project(land, koppen), touches = TRUE)
+# has.colors(koppen)
+# kd <- data.frame(id = 1:6,
+#                  Koppen = c("Temperate", "Grassland", "Desert",
+#                             "Subtropical", "Tropical", "Equatorial"))
+# levels(koppen) <- kd
+# koppen
+# plot(koppen)
 
 # Compute areal averages across zones, or across the entire Sahul area
 get_summary_stats <- function(r, timevec, varname, koppen = NULL) {
@@ -156,8 +162,8 @@ get_summary_stats <- function(r, timevec, varname, koppen = NULL) {
     })
     dt <- rbindlist(koppen_summary)
     category_df <- cats(koppen)[[1]]
-    dt <- merge(dt, category_df, by.x = "zone", by.y = "id", all.x = TRUE)
-    setcolorder(dt, c("time", "mean", "sd", "variable", "Koppen", "zone"))
+    dt <- merge(dt, category_df, by.x = "zone", by.y = "ID", all.x = TRUE)
+    setcolorder(dt, c("time", "mean", "sd", "variable", "zone", "code", "major_desc", "description"))
     return(dt)
   }
 }
@@ -169,12 +175,12 @@ brown_summary <- rbindlist(lapply(seq_along(brown), function(i) {
 brown_summary[, Model := "Brown"]
 brown_summary
 
-zseq <- time(agcd$pr)
-agcd_summary <- rbindlist(lapply(seq_along(agcd), function(i) {
-  get_summary_stats(r = agcd[[i]], timevec = zseq, varname = names(agcd)[i], koppen)
+zseq <- time(silo$pr)
+silo_summary <- rbindlist(lapply(seq_along(silo), function(i) {
+  get_summary_stats(r = silo[[i]], timevec = zseq, varname = names(silo)[i], koppen)
 }))
-agcd_summary[, Model := "BoM"]
-agcd_summary
+silo_summary[, Model := "BoM"]
+silo_summary
 
 zseq <- time(chelsa_12$pr)
 chelsa_summary <- rbindlist(lapply(seq_along(chelsa_12), function(i) {
@@ -190,18 +196,24 @@ chelsaTrace_summary <- rbindlist(lapply(seq_along(chelsa_trace), function(i) {
 chelsaTrace_summary[, Model := "Karger"]
 chelsaTrace_summary
 
-dt_summary <- rbindlist(list(brown_summary, agcd_summary, chelsa_summary, chelsaTrace_summary))
+dt_summary <- rbindlist(list(brown_summary, silo_summary, chelsa_summary, chelsaTrace_summary))
 dt_summary
 
 saveRDS(dt_summary, "03_comparisons/koppen_comparisons_contemporary.RDS")
 
 dt_summary[, Year := as.integer(format(dt_summary[["time"]], "%Y"))]
 dt_summary
-dt_avg <- copy(dt_summary)[, .(mean = mean(mean), sd = mean(sd)), by = c("Year", "variable", "Koppen", "Model")]
+dt_avg <- copy(dt_summary)[, .(mean = mean(mean), sd = mean(sd)), by = c("Year", "variable", "major_desc", "Model")]
+karger_summaries <- rbindlist(list(
+  copy(dt_avg)[Model == "Karger", ][, Year := 1900L],
+  copy(dt_avg)[Model == "Karger", ][, Year := 1989L])
+)
+dt_avg <- rbindlist(list(dt_avg, karger_summaries))
 dt_avg
-ggplot(dt_avg[variable == "tasmin", ],
+
+ggplot(dt_avg[variable == "pr" & Model != "BoM", ],
        aes(x = Year, y = mean, color = Model, fill = Model)) +
-  facet_wrap(~ Koppen, scales = "free_y") +
+  facet_wrap(~ major_desc, scales = "free_y") +
   geom_line() +
   geom_ribbon(aes(ymin = mean - sd, ymax = mean + sd), alpha = 0.2, color = NA) +
   labs(title = "Regional Mean and Variability Over Time (Sahul)", x = "Year (CE)", y = "Value") +
