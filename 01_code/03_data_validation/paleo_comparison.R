@@ -66,17 +66,19 @@ brown
 brown <- sds(
   c(brown[[2]]/c(rep(10, 215), 5), brown[[1]]),
   c(brown[[4]], brown[[3]]),
-  c(brown[[6]], brown[[5]]),
-  c(brown[[8]], brown[[7]]))
+  c(brown[[6]], brown[[5]]))
 time(brown, tstep = "years") <- c(time_centennial, time_annual)
 brown
 
-plot(brown$pr[[c(1, 216, 217, 706)]], nc = 2,
-     fun = function() lines(land), range = c(0, 3500),
+plot(brown$pr[[c(1, 216, 217, 706)]]*86400*12, nc = 2,
+     fun = function() lines(land), range = c(0, 2000),
      fill_range = TRUE, col = hcl.colors(100, "Roma"))
 
-plot(brown$tas[[c(1, 216, 217, 706)]], nc = 2,
-     fun = function() lines(land), range = c(5, 25),
+plot(brown$tasmax[[c(1, 216, 217, 706)]], nc = 2,
+     fun = function() lines(land), range = c(5, 35),
+     fill_range = TRUE, col = hcl.colors(100, "Temps"))
+plot(brown$tasmin[[c(1, 216, 217, 706)]], nc = 2,
+     fun = function() lines(land), range = c(5, 35),
      fill_range = TRUE, col = hcl.colors(100, "Temps"))
 
 # Compute areal averages across zones, or across the entire Sahul area
@@ -105,7 +107,7 @@ get_summary_stats <- function(r, timevec, varname, koppen = NULL) {
 }
 
 zseq <- c(time_centennial, time_annual)
-brown_summary <- rbindlist(lapply(1:4, function(i) {
+brown_summary <- rbindlist(lapply(1:3, function(i) {
   get_summary_stats(r = brown[[i]], timevec = zseq, varname = names(brown)[i], koppen)
 }))
 brown_summary[, Model := "Brown"]

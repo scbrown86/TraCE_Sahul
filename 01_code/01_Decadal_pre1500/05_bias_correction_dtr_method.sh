@@ -253,7 +253,7 @@ done
 conda deactivate # need to deactivate the nco_stable env to use R
 for var in "${vars[@]}"; do
     echo -e "${GREEN}Processing $var...${RESET}"
-    files=$(ls ${base_dir}/${var}/*.nc | grep -v "biascorr\\.nc$")
+    files=$(ls ${base_dir}/${var}/*.nc | grep "biascorr\\.nc$")
     for f in $files; do
         echo -e "${YELLOW} Processing $(basename "$f")...${RESET}"
         Rscript /home/dafcluster4/Documents/GitHub/TraCE_Sahul/01_code/01_Decadal_pre1500/06_split_and_add_timedims.R "$f"
