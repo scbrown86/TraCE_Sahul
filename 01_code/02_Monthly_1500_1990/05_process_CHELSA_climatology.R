@@ -128,6 +128,18 @@ varnames(fine_clim[[2]]) <- "tasmin"
 varnames(fine_clim[[3]]) <- "tasmax"
 fine_clim
 
+# multilevel b-spline to 0.05°
+# plot(pr_avg[[1]])
+# upscaled_CHELSA_pr <- interpolate_bspline(pr_avg,
+#                                           output_dir = "02_data/02_processed/CHELSA",
+#                                           bspline_ext = ext(105.0, 161.25, -52.5, 11.25),
+#                                           target_size = 0.05, ## <
+#                                           parallel_cores = 12L,
+#                                           start_date = as.Date("1985-01-16"),
+#                                           outname_template = "CHELSA_0p05_%s_climatology.nc",
+#                                           algo = "bspline", ## <
+#                                           load_exist = FALSE)
+
 # multilevel b-spline to 0.5°
 coarse_chelsa_clim <- lapply(fine_clim, interpolate_bspline,
   output_dir = "02_data/02_processed/CHELSA",
@@ -175,6 +187,24 @@ units(brown[[2]]) <- units(brown[[3]]) <- "deg_C"
 names(brown) <- c("pr", "tasmin", "tasmax")
 brown
 minmax(brown$tasmax - brown$tasmin)
+
+# brown_pr <- rast("/media/dafcluster4/storage/TraCE_1500_1990CE/1500_1990/out/pr/TraCE_downscaled_1500_1990_concat.nc",
+#                    lyrs = 5761:5880)
+# time(brown_pr) <- seq(as.Date("1980-01-16"), by = "month", l = 120)
+# brown_pr <- tapp(brown_pr, "months", mean)
+# varnames(brown_pr) <- "pr"
+# units(brown_pr) <- "kg/m2/s"
+# brown_pr
+# plot(brown_pr[[1]])
+# expanded_downTrace_pr <- interpolate_bspline(brown_pr,
+#                                           output_dir = "02_data/02_processed/TRACE",
+#                                           bspline_ext = ext(105.0, 161.25, -52.5, 11.25),
+#                                           target_size = 0.05, ## <
+#                                           parallel_cores = 12L,
+#                                           start_date = as.Date("1985-01-16"),
+#                                           outname_template = "TraCE_0p05_%s_climatology.nc",
+#                                           algo = "bspline", ## <
+#                                           load_exist = FALSE)
 
 brown_climatologies <- c(
   "02_data/02_processed/TRACE/TraCE_coarse_pr_climatology.nc",
@@ -262,7 +292,7 @@ panel(delta_pr[[1:4]], fun = function() lines(land, col = "#000000"),
      range = c(0, 2), fill_range = TRUE,
      col = hcl.colors(100, "mako"))
 
-# Tempaerture correction is a mulit step process. 
+# Tempaerture correction is a multi step process. 
 # correct mean temperature with additive delta
 # correct dtr with ratio
 # calculate new min/max as corr. tas +/- 0.5 * corr. dtr

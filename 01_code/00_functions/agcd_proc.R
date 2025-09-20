@@ -10,7 +10,7 @@ agcd_proc <- function(variable, dir, template, years,
   # extract the years from fil.list
   ann_NCI <- pblapply(years, function(year, ...) {
     fil.list.annual <- fil.list[grepl(pattern = year, fil.list)]
-    nci_ras <- rast(fil.list.annual, win = ext(template))
+    nci_ras <- rast(fil.list.annual, win = ext(template), snap = "out")
     # convert from mm/month to kg/m2/s
     # if (variable == "precip") {
     #   nci_ras <- nci_ras/(86400*c(31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31))

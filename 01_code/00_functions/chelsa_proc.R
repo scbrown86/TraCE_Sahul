@@ -46,7 +46,7 @@ chelsa_proc <- function(variable, dir, outdir, type = "\\.tif$",
       chelsa <- ifel(chelsa == 65535, NA, chelsa)
       # convert
       chelsa <- (chelsa / conv_rate)
-      units(chelsa) <- "kg/m2/s"
+      units(chelsa) <- "kg m-2 s-1"
       varnames(chelsa) <- variable
       time(chelsa) <- seq(as.Date(paste0(year, "-01-16")), by = "months", l = 12)
       names(chelsa) <- format(time(chelsa), "%b%Y")
