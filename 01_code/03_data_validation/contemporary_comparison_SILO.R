@@ -38,19 +38,24 @@ plot_avg <- FALSE
 #         dir = "/mnt/Data/SILO/TASMIN")
 
 # read in our downscaled data
-brown <- list.files(path = "/media/dafcluster4/storage/TraCE_1500_1990CE/1500_1990/out",
-                    pattern = "biascorr.nc",
-                    recursive = TRUE,
-                    full.names = TRUE)
-brown
-brown <- pblapply(brown, function(x) {
-  r <- rast(x, lyrs = 4801:5880, win = ext(land), snap = "out")
-  time(r) <- seq(as.Date("1900-01-16"), by = "month", l = nlyr(r))
-  r
-})
-brown <- sds(brown)
+# brown <- list.files(path = "/media/dafcluster4/storage/TraCE_1500_1990CE/1500_1990/out",
+#                     pattern = "qdm|biascorr.nc",
+#                     recursive = TRUE,
+#                     full.names = TRUE)
+# brown
+# brown <- pblapply(brown, function(x) {
+#   r <- rast(x, lyrs = 4801:5880, win = ext(land), snap = "out")
+#   time(r) <- seq(as.Date("1900-01-16"), by = "month", l = nlyr(r))
+#   r
+# })
+brown <- sds(rast("/media/dafcluster4/storage/TraCE_1500_1990CE/1500_1990/out/pr/qdm_adj_pr_1950_1989.nc",
+                  win = ext(land), snap = "out"),
+            rast("/media/dafcluster4/storage/TraCE_1500_1990CE/1500_1990/out/tasmax/TraCE_22ka_downscaled_tasmax_1500_1990_biascorr.nc",
+                  win = ext(land), snap = "out", lyrs = 5401:5880),
+            rast("/media/dafcluster4/storage/TraCE_1500_1990CE/1500_1990/out/tasmin/TraCE_22ka_downscaled_tasmin_1500_1990_biascorr.nc",
+                  win = ext(land), snap = "out", lyrs = 5401:5880))
 names(brown) <- c("pr", "tasmax", "tasmin")
-time(brown) <- seq(as.Date("1900-01-16"), by = "month", l = nlyr(brown$pr))
+time(brown) <- seq(as.Date("1950-01-16"), by = "month", l = nlyr(brown$pr))
 brown
 
 # load in SILO
@@ -72,13 +77,13 @@ brown
 source("01_code/00_functions/agcd_proc.R")
 silo <- pblapply(c("precip", "tmax", "tmin"), agcd_proc,
                  dir = "/mnt/Data/AusClim/data/raw/agcd",
-                 template = brown$pr[[1]], years = 1910:1989,
+                 template = brown$pr[[1]], years = 1950:1989,
                  proj_method = "average", type = ".nc$")
 names(silo) <- c("pr", "tasmax", "tasmin")
 silo$pr <- setValues(silo$pr, values(silo$pr)/(86400 * dmon))
 units(silo$pr) <- units(brown$pr)[1]
 time(silo$pr) <- time(silo$tasmax) <- time(silo$tasmin) <-
-  seq(as.Date("1910-01-16"), by = "month", l = nlyr(silo$pr))
+  seq(as.Date("1950-01-16"), by = "month", l = nlyr(silo$pr))
 silo
 
 # Load in CHELSA baseline data
@@ -178,7 +183,8 @@ get_summary_stats <- function(r, timevec, varname, koppen = NULL) {
 zseq <- time(brown$pr)
 brown_summary <- rbindlist(lapply(seq_along(brown), function(i) {
   get_summary_stats(r = brown[[i]], timevec = zseq, varname = names(brown)[i],
-                    koppen = koppen_bom)
+                    #koppen = koppen_bom)
+  )
 }))
 brown_summary[, Model := "Brown"]
 brown_summary
@@ -207,7 +213,7 @@ chelsaTrace_summary
 dt_summary <- rbindlist(list(brown_summary, silo_summary, chelsa_summary, chelsaTrace_summary))
 dt_summary
 
-saveRDS(dt_summary, "03_comparisons/koppen_comparisons_contemporary.RDS")
+saveRDS(dt_summary, "03_comparisons/koppen_comparisons_contemporary_1950_1989.RDS")
 
 dt_summary[, Year := as.integer(format(dt_summary[["time"]], "%Y"))]
 dt_summary

@@ -75,3 +75,4 @@ delta_remapped_tmp.nc
 03_comparisons/scratch/*.tif
 03_comparisons/bc_investigations/*.tif
 03_comparisons/scratch/*.nc
+python_test/qdm_trained_pr_Sahul.nc
