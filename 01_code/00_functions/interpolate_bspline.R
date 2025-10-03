@@ -16,7 +16,7 @@ interpolate_bspline <- function(x, output_dir,
                                 delta = FALSE) {
   require(terra); require(pbapply)
   stopifnot(inherits(x, "SpatRaster"))
-  if (nlyr(x) != 12) stop("The raster must have 12 monthly layers.")
+  if (nlyr(x) %% 12 != 0) stop("The number of layers must be divisible by 12")
   if (!delta && is.null(units(x))) stop("Raster must have units set using `units(x)` if delta = FALSE.")
   var_name <- varnames(x)
   var_unit <- if (!delta) {
@@ -75,21 +75,22 @@ interpolate_bspline <- function(x, output_dir,
     message("Loading existing netcdf...")
     return(rast(nc_outfile))
   }
-  out_files <- file.path(output_dir, sprintf("%s_bspline_%02d.tif", out_prefix, 1:12))
+  out_files <- file.path(output_dir, sprintf("%s_bspline_%02d.tif", out_prefix, 1:nlyr(x)))
   if (all(sapply(out_files, file.exists)) && load_exist) {
     message("Loading b-spline tif files...")
     out_stack <- rast(lapply(out_files, rast))
   } else {
     message("Interpolating...")
-    interpolated <- pblapply(seq_len(12), function(i, ...) {
+    interpolated <- pblapply(seq_len(nlyr(x)), function(i, ...) {
+      layer_assignment <- (((1:nlyr(x) - 1) %% length(month_days)) + 1)[i]
       out_file <- out_files[i]
       if (file.exists(out_file) && load_exist) {
         return(wrap(rast(out_file)))
       }
-      tmp_r <- tempfile(pattern = sprintf("bspline_%s_%02d_", out_prefix, i), fileext = ".tif")
+      tmp_r <- tempfile(pattern = sprintf("bspline_%s_%03d_", out_prefix, i), fileext = ".tif")
       ingrid <- unwrap(x)[[i]] * 1
       if (!delta && is_precip) {
-        dmon <- month_days[i]
+        dmon <- month_days[layer_assignment]
         ingrid <- ingrid * (86400 * dmon)
         ingrid <- ifel(ingrid < 5, 5, ingrid)
       }
@@ -110,7 +111,7 @@ interpolate_bspline <- function(x, output_dir,
         }
         b <- qgis_as_terra(bspline$result)
         if (!delta && is_precip) {
-          dmon <- month_days[i]
+          dmon <- month_days[layer_assignment]
           b <- ifel(b < 1, 1, b)
           b <- b + 0.0001
           b <- b / (86400 * dmon)
@@ -128,7 +129,7 @@ interpolate_bspline <- function(x, output_dir,
         }
         b <- bspline$result
         if (!delta && is_precip) {
-          dmon <- month_days[i]
+          dmon <- month_days[layer_assignment]
           b <- ifel(b < 1, 1, b)
           b <- b + 0.0001
           b <- b / (86400 * dmon)
@@ -141,7 +142,7 @@ interpolate_bspline <- function(x, output_dir,
     }, cl = parallel_cores)
     out_stack <- rast(lapply(interpolated, unwrap))
   }
-  time(out_stack) <- seq(start_date, by = "month", length.out = 12)
+  time(out_stack) <- seq(start_date, by = "month", length.out = nlyr(x))
   units(out_stack) <- nc_unit
   varnames(out_stack) <- nc_varname
   longnames(out_stack) <- nc_longname
