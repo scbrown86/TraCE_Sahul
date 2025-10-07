@@ -91,8 +91,8 @@ interpolate_bspline <- function(x, output_dir,
       ingrid <- unwrap(x)[[i]] * 1
       if (!delta && is_precip) {
         dmon <- month_days[layer_assignment]
-        ingrid <- ingrid * (86400 * dmon)
-        ingrid <- ifel(ingrid < 5, 5, ingrid)
+        ingrid <- ingrid * 86400 # mm/day
+        ingrid <- ifel(ingrid < 0, 0, ingrid)
       }
       if (algo == "bspline") {
         bspline <- safe_spline(
@@ -112,9 +112,8 @@ interpolate_bspline <- function(x, output_dir,
         b <- qgis_as_terra(bspline$result)
         if (!delta && is_precip) {
           dmon <- month_days[layer_assignment]
-          b <- ifel(b < 1, 1, b)
-          b <- b + 0.0001
-          b <- b / (86400 * dmon)
+          b <- ifel(b < 0, 0, b)
+          b <- b / 86400 # kg m-2 s-1
         }
       } else {
         bspline <- safe_project(ingrid,
@@ -130,9 +129,8 @@ interpolate_bspline <- function(x, output_dir,
         b <- bspline$result
         if (!delta && is_precip) {
           dmon <- month_days[layer_assignment]
-          b <- ifel(b < 1, 1, b)
-          b <- b + 0.0001
-          b <- b / (86400 * dmon)
+          b <- ifel(b < 0, 0, b)
+          b <- b / 86400 # kg m-2 s-1
         }
       }
       writeRaster(b, filename = out_file,

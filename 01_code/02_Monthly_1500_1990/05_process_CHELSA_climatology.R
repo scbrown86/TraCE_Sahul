@@ -102,60 +102,92 @@ if (!all(file.exists(chelsa_climatologies))) {
   tas_avg <- rast("02_data/02_processed/CHELSA/CHELSA_tas_climatology.nc")
 }
 
-# Load in the land/sea mask
-chelsa_mask <- rast("/mnt/Data/CHELSA_Trace21/Input/CHELSA_TraCE21k_dem_20_V1.0.tif",
-                    win = ext(105.0, 161.25, -52.5, 11.25))
-chelsa_mask <- ifel(is.na(chelsa_mask), NA_integer_, 1L)
-chelsa_mask <- project(chelsa_mask, pr_avg, "near")
+### RUN THIS IN A TERMINAL ###
+# conda activate nco_stable
+# BASE_DIR="/home/dafcluster4/Documents/GitHub/TraCE_Sahul/02_data/02_processed/CHELSA"
+# cdo -f nc sellonlatbox,105,161.25,-52.5,11.25 -const,1,global_0.05 "${BASE_DIR}/agg_target.nc"
+# export CDO_REMAP_NORM="destarea"
+# export REMAP_AREA_MIN=0.10
+# gdal_translate "${BASE_DIR}/CHELSA_pr_climatology.nc" "${BASE_DIR}/CHELSA_pr_climatology_gdal.nc"
+# cdo -P 100 gencon,"${BASE_DIR}/agg_target.nc" "${BASE_DIR}/CHELSA_pr_climatology_gdal.nc" "${BASE_DIR}/pr_weights.nc"
+# export CDO_REMAP_NORM="fracarea"
+# export REMAP_AREA_MIN=0.10
+# gdal_translate "${BASE_DIR}/CHELSA_tas_climatology.nc" "${BASE_DIR}/CHELSA_tas_climatology_gdal.nc"
+# cdo -P 100 gencon,"${BASE_DIR}/agg_target.nc" "${BASE_DIR}/CHELSA_tas_climatology_gdal.nc" "${BASE_DIR}/tas_weights.nc"
+# export CDO_REMAP_NORM="destarea"
+# export REMAP_AREA_MIN=0.10
+# cdo -s -b F32 -P 100 \
+#             -remap,"${BASE_DIR}/agg_target.nc","${BASE_DIR}/pr_weights.nc"  \
+#             "${BASE_DIR}/CHELSA_pr_climatology_gdal.nc" "${BASE_DIR}/CHELSA_pr_climatology_coarse_remapcon.nc"
+# export CDO_REMAP_NORM="fracarea"
+# export REMAP_AREA_MIN=0.10
+# gdal_translate "${BASE_DIR}/CHELSA_tasmax_climatology.nc" "${BASE_DIR}/CHELSA_tasmax_climatology_gdal.nc"
+# gdal_translate "${BASE_DIR}/CHELSA_tasmin_climatology.nc" "${BASE_DIR}/CHELSA_tasmin_climatology_gdal.nc"
+# cdo -s -b F32 -P 100 remap,"${BASE_DIR}/agg_target.nc","${BASE_DIR}/tas_weights.nc" "${BASE_DIR}/CHELSA_tas_climatology_gdal.nc" "${BASE_DIR}/CHELSA_tas_climatology_coarse_remapcon.nc"
+# cdo -s -b F32 -P 100 remap,"${BASE_DIR}/agg_target.nc","${BASE_DIR}/tas_weights.nc" "${BASE_DIR}/CHELSA_tasmax_climatology_gdal.nc" "${BASE_DIR}/CHELSA_tasmax_climatology_coarse_remapcon.nc"
+# cdo -s -b F32 -P 100 remap,"${BASE_DIR}/agg_target.nc","${BASE_DIR}/tas_weights.nc" "${BASE_DIR}/CHELSA_tasmin_climatology_gdal.nc" "${BASE_DIR}/CHELSA_tasmin_climatology_coarse_remapcon.nc"
+# rm -rf "${BASE_DIR}/CHELSA_pr_climatology_gdal.nc" "${BASE_DIR}/CHELSA_tas_climatology_gdal.nc" "${BASE_DIR}/CHELSA_tasmax_climatology_gdal.nc" "${BASE_DIR}/CHELSA_tasmin_climatology_gdal.nc"
+###
 
-# Mask the CHELSA v1.2 data
-pr_avg <- mask(pr_avg, chelsa_mask)
-tmn_avg <- mask(tmn_avg, chelsa_mask)
-tmx_avg <- mask(tmx_avg, chelsa_mask)
-tas_avg <- mask(tas_avg, chelsa_mask)
+# # Load in the land/sea mask
+# chelsa_mask <- rast("/mnt/Data/CHELSA_Trace21/Input/CHELSA_TraCE21k_dem_20_V1.0.tif",
+#                     win = ext(105.0, 161.25, -52.5, 11.25))
+# chelsa_mask <- ifel(is.na(chelsa_mask), NA_integer_, 1L)
+# chelsa_mask <- project(chelsa_mask, pr_avg, "near")
 
-plot(pr_avg[[1]], range = c(0, 0.0003), fill_range = TRUE, fun = function() lines(land), col = hcl.colors(100, "YlGnBu", rev = TRUE))
-plot(tas_avg[[1]], range = c(5, 30), fill_range = TRUE, fun = function() lines(land), col = hcl.colors(100, "Spectral", rev = TRUE))
-plot(app(pr_avg, sum), range = c(0, 0.002), fill_range = TRUE, fun = function() lines(land), col = hcl.colors(100, "YlGnBu", rev = TRUE))
-plot(tmx_avg[[1]] - tmn_avg[[1]])
+# # Mask the CHELSA v1.2 data
+# pr_avg <- mask(pr_avg, chelsa_mask)
+# tmn_avg <- mask(tmn_avg, chelsa_mask)
+# tmx_avg <- mask(tmx_avg, chelsa_mask)
+# tas_avg <- mask(tas_avg, chelsa_mask)
+
+# plot(pr_avg[[1]], range = c(0, 0.0003), fill_range = TRUE, fun = function() lines(land), col = hcl.colors(100, "YlGnBu", rev = TRUE))
+# plot(tas_avg[[1]], range = c(5, 30), fill_range = TRUE, fun = function() lines(land), col = hcl.colors(100, "Spectral", rev = TRUE))
+# plot(app(pr_avg, sum), range = c(0, 0.002), fill_range = TRUE, fun = function() lines(land), col = hcl.colors(100, "YlGnBu", rev = TRUE))
+# plot(tmx_avg[[1]] - tmn_avg[[1]])
+
+
 
 # convert the CHELSA climatology data to 0.5 degree using b-splines
 source("01_code/00_functions/interpolate_bspline.R")
 
-fine_clim <- list(pr_avg, tmn_avg, tmx_avg)
-varnames(fine_clim[[1]]) <- "pr"
-varnames(fine_clim[[2]]) <- "tasmin"
-varnames(fine_clim[[3]]) <- "tasmax"
-fine_clim
+# fine_clim <- list(pr_avg, tmn_avg, tmx_avg)
+# varnames(fine_clim[[1]]) <- "pr"
+# varnames(fine_clim[[2]]) <- "tasmin"
+# varnames(fine_clim[[3]]) <- "tasmax"
+# fine_clim
 
 # multilevel b-spline to 0.05°
-# plot(pr_avg[[1]])
-# pr_avg <- mask(pr_avg, chelsa_mask)
-# varnames(pr_avg) <- "pr"
-# longnames(pr_avg) <- "precipitation"
-# pr_avg
-# upscaled_CHELSA_pr <- interpolate_bspline(pr_avg,
-#                                           output_dir = "02_data/02_processed/CHELSA",
-#                                           bspline_ext = ext(105.0, 161.25, -52.5, 11.25),
-#                                           target_size = 0.05, ## <
-#                                           parallel_cores = 12L,
-#                                           start_date = as.Date("1980-01-16"),
-#                                           outname_template = "CHELSA_0p05_%s_climatology.nc",
-#                                           algo = "bspline", ## <
-#                                           load_exist = TRUE)
-
+pr_avg <- rast("02_data/02_processed/CHELSA/CHELSA_pr_climatology_coarse_remapcon.nc")
+varnames(pr_avg) <- "pr"
+longnames(pr_avg) <- "precipitation"
+pr_avg
+minmax(pr_avg*86400)
+panel(pr_avg*86400, range = c(0, 15), fill_range = TRUE)
+upscaled_CHELSA_pr <- interpolate_bspline(pr_avg,
+                                          output_dir = "02_data/02_processed/CHELSA",
+                                          bspline_ext = ext(105.0, 161.25, -52.5, 11.25),
+                                          target_size = 0.05, ## <
+                                          parallel_cores = 12L,
+                                          start_date = as.Date("1985-01-16"),
+                                          outname_template = "CHELSA_0p05_%s_climatology.nc",
+                                          algo = "bspline", ## <
+                                          load_exist = TRUE)
+upscaled_CHELSA_pr
+minmax(upscaled_CHELSA_pr*86400) # mm/day
+panel(upscaled_CHELSA_pr*86400, range = c(0, 15), fill_range = TRUE)
 # multilevel b-spline to 0.5°
-coarse_chelsa_clim <- lapply(fine_clim, interpolate_bspline,
-  output_dir = "02_data/02_processed/CHELSA",
-  bspline_ext = ext(105.0, 161.25, -52.5, 11.25),
-  target_size = 0.5,
-  parallel_cores = 12L,
-  start_date = as.Date("1985-01-16"),
-  outname_template = "CHELSA_coarse_%s_climatology.nc",
-  algo = "bspline", ## <
-  load_exist = TRUE)
-names(coarse_chelsa_clim) <- c("pr", "tasmin", "tasmax")
-coarse_chelsa_clim
+# coarse_chelsa_clim <- lapply(fine_clim, interpolate_bspline,
+#   output_dir = "02_data/02_processed/CHELSA",
+#   bspline_ext = ext(105.0, 161.25, -52.5, 11.25),
+#   target_size = 0.5,
+#   parallel_cores = 12L,
+#   start_date = as.Date("1985-01-16"),
+#   outname_template = "CHELSA_coarse_%s_climatology.nc",
+#   algo = "bspline", ## <
+#   load_exist = TRUE)
+# names(coarse_chelsa_clim) <- c("pr", "tasmin", "tasmax")
+# coarse_chelsa_clim
 
 plot(app(coarse_chelsa_clim$pr, sum)*86400*12, range = c(0, 3000), fill_range = TRUE, fun = function() lines(land), col = hcl.colors(100, "YlGnBu", rev = TRUE))
 panel(coarse_chelsa_clim$tasmin, range = c(5, 30), fill_range = TRUE, fun = function() lines(land), col = hcl.colors(100, "Spectral", rev = TRUE))
@@ -197,18 +229,24 @@ brown_pr <- rast("/media/dafcluster4/storage/TraCE_1500_1990CE/1500_1990/out/pr/
 time(brown_pr) <- seq(as.Date("1980-01-16"), by = "month", l = 120)
 brown_pr <- tapp(brown_pr, "months", mean)
 varnames(brown_pr) <- "pr"
+longnames(brown_pr) <- "precipitation"
 units(brown_pr) <- "kg/m2/s"
 brown_pr
-plot(brown_pr[[1]])
+minmax(brown_pr*86400)
+panel(brown_pr*86400, range = c(0, 15), fill_range = TRUE)
+
 expanded_downTrace_pr <- interpolate_bspline(brown_pr,
                                           output_dir = "02_data/02_processed/TRACE",
                                           bspline_ext = ext(105.0, 161.25, -52.5, 11.25),
                                           target_size = 0.05, ## <
                                           parallel_cores = 12L,
-                                          start_date = as.Date("1980-01-16"),
+                                          start_date = as.Date("1985-01-16"),
                                           outname_template = "TraCE_0p05_%s_climatology.nc",
                                           algo = "bspline", ## <
                                           load_exist = TRUE)
+expanded_downTrace_pr
+minmax(expanded_downTrace_pr*86400) # mm/day
+panel(expanded_downTrace_pr*86400, range = c(0, 15), fill_range = TRUE)
 
 brown_climatologies <- c(
   "02_data/02_processed/TRACE/TraCE_coarse_pr_climatology.nc",
@@ -283,20 +321,28 @@ minmax(coarse_trace_clim$tasmax - coarse_trace_clim$tasmin) # some negative dtr 
 #### DELTAS ####
 # create delta between the CHELSA and downscaled TraCE climatology
 rbind(
-  minmax(coarse_chelsa_clim$pr * (c(31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31) * 86400)),
-  minmax(coarse_trace_clim$pr * (c(31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31) * 86400)))
+  minmax(coarse_chelsa_clim$pr * 86400),
+  minmax(coarse_trace_clim$pr * 86400))
+
+rbind(
+  minmax(upscaled_CHELSA_pr * 86400),
+  minmax(expanded_downTrace_pr * 86400))
 
 # simple delta correction for precip.
 delta_pr <- (coarse_chelsa_clim$pr + 1e-4) / (coarse_trace_clim$pr + 1e-4)
+delta_pr <- ((upscaled_CHELSA_pr * 86400) + 1) / ((expanded_downTrace_pr * 86400) + 1)
 varnames(delta_pr) <- "pr"
 longnames(delta_pr) <- "precipitation delta"
 units(delta_pr) <- ""
 delta_pr
-panel(delta_pr[[1:4]], fun = function() lines(land, col = "#000000"),
-     range = c(0, 2), fill_range = TRUE,
+
+minmax(delta_pr)
+
+panel(delta_pr, fun = function() lines(land, col = "#000000"),
+     range = c(0, 4), fill_range = TRUE,
      col = hcl.colors(100, "mako"))
 
-# Tempaerture correction is a multi step process. 
+# Temperature correction is a multi step process. 
 # correct mean temperature with additive delta
 # correct dtr with ratio
 # calculate new min/max as corr. tas +/- 0.5 * corr. dtr
@@ -339,6 +385,7 @@ if (!dir.exists("02_data/02_processed/deltas")) {
   dir.create("02_data/02_processed/deltas", recursive = TRUE)
 }
 deltas <- list(delta_pr, delta_tmean, delta_dtr)
+deltas <- list(delta_pr)
 deltas
 deltas_fine <- lapply(deltas, interpolate_bspline,
   output_dir = "02_data/02_processed/deltas",
@@ -433,6 +480,11 @@ deltas_fineMasked <- pblapply(deltas_fine, function(i) {
   mask(i, mask_22k)
 })
 deltas_fineMasked
+
+panel(deltas_fineMasked$pr, fun = function() lines(land),
+     range = c(0, 2), fill_range = TRUE,
+     breaks = seq(0, 2, by = 0.1),
+     col = hcl.colors(20, "Spectral"))
 
 # what are the percentiles for those masked layers
 minmax(deltas_fineMasked$dtr[[c(5,8)]])
