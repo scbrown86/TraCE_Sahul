@@ -23,8 +23,10 @@ for var in "${variables[@]}"; do
             continue
         fi
         echo "Processing variable: $var"
-        echo "Inputs: $(basename $input_file_tasmax), $(basename $input_file_tasmin)"
-        echo "Deltas: $(basename $delta_file), $(basename $delta_file_dtr)"
+        echo "Inputs: $(basename "$(dirname "$input_file_tasmax")")/$(basename "$input_file_tasmax"), \
+        $(basename "$(dirname "$input_file_tasmin")")/$(basename "$input_file_tasmin")"
+        echo "Deltas: $(basename "$(dirname "$delta_file")")/$(basename "$delta_file"), \
+        $(basename "$(dirname "$delta_file_dtr")")/$(basename "$delta_file_dtr")"
         # make temporary files
         tmp_unpacked_tasmax=$(mktemp --suffix "_tasmax_unpacked.nc")
         tmp_unpacked_tasmin=$(mktemp --suffix "_tasmin_unpacked.nc")
@@ -124,8 +126,8 @@ for var in "${variables[@]}"; do
             continue
         fi
         echo "Processing variable: $var"
-        echo "Input: $(basename $input_file)"
-        echo "Delta: $(basename $delta_file)"
+        echo "Input: $(basename "$(dirname "$input_file")")/$(basename "$input_file")"
+        echo "Delta: $(basename "$(dirname "$delta_file")")/$(basename "$delta_file")"
         # make temporary files
         tmp_unpacked=$(mktemp --suffix "_${var}_unpacked.nc")
         tmp_delta=$(mktemp --suffix "_${var}_remap.nc")

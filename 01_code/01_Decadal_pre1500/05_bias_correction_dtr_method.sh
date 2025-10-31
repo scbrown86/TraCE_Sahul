@@ -95,8 +95,10 @@ for chunk_dir in "${input_base}"/[0-9][0-9][0-9][0-9][0-9]_[0-9][0-9][0-9][0-9][
                 continue
             fi
             echo -e "${GREEN}  Bias correcting: $var${RESET}"
-            echo -e "${BLUE}      Inputs: $(basename "$input_file_tasmax"), $(basename "$input_file_tasmin")${RESET}"
-            echo -e "${BLUE}      Deltas: $(basename "$delta_file"), $(basename "$delta_file_dtr")${RESET}"
+            echo -e "${BLUE}      Inputs: $(basename "$(dirname "$input_file_tasmax")")/$(basename "$input_file_tasmax"), \
+                    $(basename "$(dirname "$input_file_tasmin")")/$(basename "$input_file_tasmin")${RESET}"
+            echo -e "${BLUE}      Deltas: $(basename "$(dirname "$delta_file")")/$(basename "$delta_file"), \
+                    $(basename "$(dirname "$delta_file_dtr")")/$(basename "$delta_file_dtr")${RESET}"
             # temp files
             tmp_unpacked_tasmax=$(mktemp --suffix "_tasmax_unpacked.nc")
             tmp_unpacked_tasmin=$(mktemp --suffix "_tasmin_unpacked.nc")
@@ -172,9 +174,9 @@ for chunk_dir in "${input_base}"/[0-9][0-9][0-9][0-9][0-9]_[0-9][0-9][0-9][0-9][
                 echo "Input file for ${var} not found."
                 continue
             fi
-            echo -e "${GREEN}  Bias correcting: $var${RESET}"
-            echo -e "${BLUE}        Input: $(basename $input_file)${RESET}"
-            echo -e "${BLUE}        Delta: $(basename $delta_file)${RESET}"
+            echo -e "${GREEN}   Bias correcting: $var${RESET}"
+            echo -e "${BLUE}        Input: $(basename "$(dirname "$input_file")")/$(basename "$input_file")${RESET}"
+            echo -e "${BLUE}        Delta: $(basename "$(dirname "$delta_file")")/$(basename "$delta_file")${RESET}"
             # temp
             tmp_unpacked=$(mktemp --suffix "_${var}_unpacked.nc")
             tmp_delta=$(mktemp --suffix "_${var}_remap.nc")
@@ -243,8 +245,6 @@ vars=(pr tasmax tasmin)
 for var in "${vars[@]}"; do
     infile="${base_dir}/${var}/TraCE_22ka_downscaled_${var}_decadal_21k_1500CE_biascorr.nc"
     outfile="${base_dir}/${var}/TraCE_22ka_downscaled_${var}_decadal_21k_1500CE_biascorr_"
-    # echo -e "${YELLOW}Changing time index to float, for $var...${RESET}"
-    # ncap2 -O -s 'time=float(time)' "$infile" "$infile" # make sure time is float
     echo -e "${GREEN}Splitting $var...${RESET}"
     cdo -f nc4 -P 100 -L -splitsel,${split_num} "$infile" "$outfile"
 done

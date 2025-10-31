@@ -9,12 +9,12 @@ output:
     fig_height: 12
 ---
 
-```{r setup, include=TRUE}
-knitr::opts_chunk$set(echo = TRUE,
-                      cache = TRUE)
+```{r setup, include=TRUE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE, cache = TRUE)
 library(terra)
 library(pbapply)
 library(data.table)
+library(openair)
 library(ggplot2)
 
 knitr::opts_chunk$set(cache = TRUE, fig.align = 'center', 
@@ -108,6 +108,13 @@ And now we can apply the bias correction. Because the `ratio_correction` is the 
 
 ```{r applyBias}
 downTrace_corrected <- downTrace * ratio_correction
+
+# Here we threshold the data.
+## Anything less than 0.1mm/day (1.157e-6 kg m-2 s-1), becomes 0mm/day
+# 0.1mm/day = 0.0001 m-2 / 86400 s = 1.157e-9 m-2 s-1 * 1000 kg = 1.157e-6 kg m-2 s-1
+thresh <- ((0.1 / 1000) / 86400) * 1000
+downTrace_corrected <- ifel(downTrace_corrected < thresh, 0, downTrace_corrected)
+
 units(downTrace_corrected) <- units(downTrace)
 downTrace_corrected # kg m-2 s-1
 
@@ -157,8 +164,16 @@ downTrace_summary <- get_summary_stats(downTrace_corrected,
                                        timevec = zseq,
                                        varname = "pr",
                                        koppen = koppen)
-downTrace_summary[, Model := "downTrace"]
+downTrace_summary[, Model := "downTrace_corrected"]
 downTrace_summary
+zseq <- time(downTrace)
+downTrace_raw_summary <- get_summary_stats(downTrace, 
+                                       timevec = zseq,
+                                       varname = "pr",
+                                       koppen = koppen)
+downTrace_raw_summary[, Model := "downTrace"]
+downTrace_raw_summary
+
 ```
 
 Now we read in some other datasets (BoM, CHELSA, and CHELSA TraCE-21) to make some comparisons across the climate zones
@@ -166,20 +181,32 @@ Now we read in some other datasets (BoM, CHELSA, and CHELSA TraCE-21) to make so
 ```{r loadBoM}
 # days in month
 dmon <- c(31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
-# Australian gridded climate data
-source("01_code/00_functions/agcd_proc.R")
-agcd <- agcd_proc(variable = "precip",
-  dir = "/mnt/Data/AusClim/data/raw/agcd",
-  template = downTrace_corrected, 
-  years = 1910:1989,
-  proj_method = "average", # similar to cdo remapcon (area weighted average)
-  type = ".nc$")
-agcd <- setValues(agcd, values(agcd) / (86400 * dmon)) # kg m-2 s-1
-varnames(agcd) <- "pr"
-longnames(agcd) <- "precipitation"
-units(agcd) <- units(downTrace)[1]
-time(agcd) <- seq(as.Date("1910-01-16"), by = "month", l = nlyr(agcd))
-agcd
+
+if (!file.exists("/mnt/Data/AusClim/data/processed/AGCD_precip_1910_1989_downTraceGrid.nc")) {
+  # Australian gridded climate data
+  source("01_code/00_functions/agcd_proc.R")
+  agcd <- agcd_proc(variable = "precip",
+                    dir = "/mnt/Data/AusClim/data/raw/agcd",
+                    template = downTrace_corrected, 
+                    years = 1910:1989,
+                    proj_method = "average", # similar to cdo remapcon (area weighted average)
+                    type = ".nc$")
+  agcd <- setValues(agcd, values(agcd) / (86400 * dmon)) # kg m-2 s-1
+  varnames(agcd) <- "pr"
+  longnames(agcd) <- "precipitation"
+  units(agcd) <- units(downTrace)[1]
+  time(agcd) <- seq(as.Date("1910-01-16"), by = "month", l = nlyr(agcd))
+  agcd
+} else {
+  agcd <- rast("/mnt/Data/AusClim/data/processed/AGCD_precip_1910_1989_downTraceGrid.nc",
+               win = ext(koppen))
+  agcd <- setValues(agcd, values(agcd) / (dmon * 86400)) # kg m-2 s-1
+  varnames(agcd) <- "pr"
+  longnames(agcd) <- "precipitation"
+  units(agcd) <- units(downTrace)[1]
+  time(agcd) <- seq(as.Date("1910-01-16"), by = "month", l = nlyr(agcd))
+  agcd
+}
 
 zseq <- time(agcd)
 agcd_summary <- get_summary_stats(agcd, timevec = zseq, varname = "pr",
@@ -248,14 +275,15 @@ zseq <- time(chelsa_trace)
 trace_summary <- get_summary_stats(chelsa_trace, timevec = zseq, varname = "pr",
                                   koppen = koppen)
 trace_summary[, Model := "CHELSA-TraCE"]
-trace_summary
+# trace_summary
 ```
 
 Now we can combine all the results into one data.table for plotting
 
 ```{r combineArealValues}
 # combined data.table
-dt_summary <- rbindlist(list(downTrace_summary, agcd_summary, chelsa_summary, trace_summary))
+dt_summary <- rbindlist(list(downTrace_summary, downTrace_raw_summary, 
+                             agcd_summary, chelsa_summary, trace_summary))
 dt_summary[, Year := as.integer(format(dt_summary[["time"]], "%Y"))]
 dt_summary
 
@@ -273,34 +301,49 @@ dt_avg
 
 ## Plot the time series for each Koppen zone
 
-Now we can easily plot the time series for each Koppen zone
+Now we can easily plot the time series for each Koppen zone. The uncorrected data is not shown here as the plot was too crowded with it.
 
 ```{r plotKoppenTS, echo = FALSE}
+region_mean <- dt_avg[Model != "downTrace", .(mean = round(mean(mean)*86400, 1), sd = round(mean(sd)*86400, 1)),
+                           by = c("Model", "Koppen")][order(Koppen)]
+
 ggplot(
-  dt_avg,
-  aes(x = Year, y = mean*86400*365, ## mm/year
+  dt_avg[Model != "downTrace", ],
+  aes(x = Year, y = mean*86400, ## mm/day
       color = Model, fill = Model)) +
   facet_wrap(~Koppen, scales = "free_y") +
   geom_line() +
   geom_ribbon(aes(
-    ymin = (mean*86400*365 - sd*86400*365),
-    ymax = (mean*86400*365 + sd*86400*365)),
+    ymin = (mean*86400 - sd*86400),
+    ymax = (mean*86400 + sd*86400)),
     alpha = 0.2, color = NA) +
+  # geom_hline(data = region_mean,
+  #            aes(yintercept = mean, color = Model),
+  #            linetype = "dashed") +
+  # geom_rect(data = region_mean, alpha = 0.3,
+  #           inherit.aes = FALSE,
+  #           show.legend = FALSE,
+  #            aes(xmin = 1900, xmax = 1989, ymin = mean - sd, ymax = mean + sd, 
+  #                fill = Model), colour = NA) +
   scale_colour_manual(name = "Model",
                       values = c("downTrace" = "#1b9e77",
+                                 "downTrace_corrected" = "#66a61e",
                                  "BoM" = "#d95f02", 
                                  "CHELSA" = "#7570b3",
                                  "CHELSA-TraCE" = "#e7298a"),
                       labels = c("downTrace" = "downTrace", 
+                                 "downTrace" = "downTrace\n(bias-corrected)",
                "BoM" = "BoM (AGCD)",
                "CHELSA" = "CHELSA v1.2",
                "CHELSA-Trace" = "CHELSA\nTraCE-21ka")) +
   scale_fill_manual(name = "Model",
     values = c("downTrace" = "#1b9e77",
+               "downTrace_corrected" = "#66a61e",
                "BoM" = "#d95f02", 
                "CHELSA" = "#7570b3",
                "CHELSA-TraCE" = "#e7298a"),
     labels = c("downTrace" = "downTrace", 
+               "downTrace" = "downTrace\n(bias-corrected)",
                "BoM" = "BoM (AGCD)",
                "CHELSA" = "CHELSA v1.2",
                "CHELSA-Trace" = "CHELSA\nTraCE-21ka"),
@@ -319,5 +362,228 @@ ggplot(
   theme_minimal() +
   theme(legend.position = "bottom",
         legend.direction = "horizontal")
+```
+
+While our interannual variability seems higher in the desert region, we actually have very similar values across all zones and datasets with regards to long term averages.
+
+```{r}
+sum_stats <- copy(dt_avg)[Model != "downTrace", .(mean = round(mean(mean)*86400, 1), sd = round(mean(sd)*86400, 1)),
+       by = c("Model", "Koppen")][order(Koppen)]
+n_samps <- 1000
+sum_stats[, samples := lapply(seq_len(.N), function(i) {
+  m <- mean[i]; s <- sd[i]
+  if (s <= 0) return(rep(m, n_samps))
+  rgamma(n_samps, shape = (m^2)/(s^2), scale = (s^2)/m)
+})]
+
+```
+
+
+Looking at random draws using a gamma distribution (which is what rainfall typically follows), we can see similarities with our data and the others
+```{r}
+# unnest samples
+plot_dt <- sum_stats[, .(value = unlist(samples)), by = .(Model, Koppen)]
+
+# get unique zones and models
+zones <- unique(plot_dt$Koppen)
+models <- unique(plot_dt$Model)
+
+# set 2x3 layout
+par(mfrow = c(2, 3), mar = c(4, 4, 2, 1))
+
+for (z in zones) {
+  sub <- plot_dt[Koppen == z]
+  dens_list <- lapply(models, function(m) density(sub[Model == m, value]))
+  
+  # find combined range for axis
+  xlim <- range(sapply(dens_list, \(d) range(d$x)))
+  ylim <- range(sapply(dens_list, \(d) range(d$y)))
+  
+  plot(dens_list[[1]], type = "l", lwd = 2, col = 1,
+       xlim = xlim, ylim = ylim,
+       main = z, xlab = "Simulated value", ylab = "Density")
+  
+  if (length(models) > 1) {
+    for (i in 2:length(models)) lines(dens_list[[i]], lwd = 2, col = i)
+  }
+  
+  # add median lines
+  for (i in seq_along(models)) {
+    m <- models[i]
+    med <- median(sub[Model == m, value])
+    abline(v = med, col = i, lwd = 1.5, lty = 2)
+  }
+  
+  legend("topright", legend = models, col = seq_along(models), lwd = 2, bty = "n")
+}
+
+```
+
+
+## Taylor diagrams and bias
+
+Here we look at maps of delta following bias correction.
+
+The first map shows the bias between the CHELSA v1.2 data and our corrected downTrace data
+
+The second, shows the bias between the BoM data and our corrected downTrace data
+
+The third, shows the bias between the CHELSA v1.2 data and the BoM data,
+
+The fourth, shows the bias between our downTrace data and the Karger et al dataset (CHELSA-TraCE)
+
+```{r biasMaps, echo = FALSE}
+# averages over the period 1910-1989
+downTrace_correct_clim <- tapp(downTrace_corrected[[121:1080]], "months", mean)*86400
+downTrace_clim <- tapp(downTrace[[121:1080]], "months", mean)*86400
+chelsaTrace_clim <- mask(chelsa_trace*86400, downTrace[[1]])
+agcd_clim <- mask(tapp(agcd, "months", mean)*86400, downTrace[[1]])
+chelsa_clim <- tapp(chelsa_12, "months", mean)*86400
+
+names(downTrace_correct_clim) <- names(downTrace_clim) <- 
+  names(chelsaTrace_clim) <- names(agcd_clim) <- names(chelsa_clim) <- month.abb
+
+hybrid_spectral <- function(n, split = 1, range = c(0, 3)) {
+  frac_red <- (split - range[1]) / diff(range)
+  n_red  <- max(1, round(n * frac_red))
+  n_blue <- n - n_red
+  c(hcl.colors(n_red, "YlOrRd"),
+    hcl.colors(n_blue, "GnBu", rev = TRUE))
+}
+breaks <- seq(0, 3, 0.1)
+cols <- hybrid_spectral(length(breaks) - 1)
+# barplot(rep(1, length(cols)), col = cols, border = NA)
+
+# plot of bias after correction
+panel(chelsa_clim / downTrace_correct_clim,
+      fun = function() lines(land),
+      range = c(min(breaks), max(breaks)),
+      fill_range = TRUE,
+      main = month.abb,
+      breaks = breaks,
+      col = cols)
+
+panel(agcd_clim / downTrace_correct_clim,
+      fun = function() lines(land),
+      range = c(min(breaks), max(breaks)),
+      fill_range = TRUE,
+      main = month.abb,
+      breaks = breaks,
+      col = cols)
+
+panel(agcd_clim / chelsa_clim,
+      fun = function() lines(land),
+      range = c(min(breaks), max(breaks)),
+      fill_range = TRUE,
+      main = month.abb,
+      breaks = breaks,
+      col = cols)
+
+panel(downTrace_correct_clim / chelsaTrace_clim,
+      fun = function() lines(land),
+      range = c(min(breaks), max(breaks)),
+      fill_range = TRUE,
+      main = month.abb,
+      breaks = breaks,
+      col = cols)
+
+```
+
+Now we can use the climatological averages to look at spatial and temporal correlations using Taylor diagrams and conditional quantile plots.
+
+This plot shows how the corrected downTrace data compares to the BoM data:
+
+```{r taylorDiags, echo = FALSE}
+obs <- melt(setDT(as.data.frame(agcd_clim, xy = TRUE)),
+         id.vars = c("x", "y"), value.name = "obs", variable.name = "Month")
+corrected <- melt(setDT(as.data.frame(downTrace_correct_clim, xy = TRUE)),
+                  id.vars = c("x", "y"), value.name = "corrected", variable.name = "Month")
+uncorrected <- melt(setDT(as.data.frame(downTrace_clim, xy = TRUE)),
+                  id.vars = c("x", "y"), value.name = "uncorrected", variable.name = "Month")
+mod.dat <- Reduce(function(x, y) merge(x, y, all = FALSE), 
+                  list(corrected, uncorrected, obs))
+mod.dat[, Koppen := terra::extract(koppen, y = mod.dat[, c("x", "y")], method = "simple")[, 2]]
+
+TaylorDiagram(mod.dat,
+  obs = "obs",
+  mod = "corrected",
+  group = "Month",
+  normalise = TRUE)
+```
+
+While this plot shows the improvement in the fit due to the bias correction. The arrows indicate where the uncorrected downTrace data would fit in the same space.
+
+```{r taylorDiags2, echo = FALSE}
+TaylorDiagram(mod.dat,
+  obs = "obs",
+  mod = c("corrected", "uncorrected"),
+  group = "Month",
+  normalise = TRUE)
+```
+
+And here are plots for the Koppen zones
+
+```{r TaylorKoppen, echo = FALSE}
+TaylorDiagram(mod.dat[!is.na(Koppen), ],
+  obs = "obs",
+  mod = "corrected",
+  group = "Koppen",
+  normalise = TRUE)
+
+TaylorDiagram(mod.dat[!is.na(Koppen), ],
+  obs = "obs",
+  mod = "corrected",
+  group = "Month", type = "Koppen",
+  normalise = TRUE)
+```
+
+
+Finally, a quick conditional quantile plot shows that the model under-predicts precipitation even after bias correction. This is a known artefact of the TraCE-21 model.
+
+A "perfect" model for each month is shown by the blue line. For most months we see that predictions tend to be increasingly negatively biased at high precipitation which is shown by departure of the median (red) line from the blue one. The widening uncertainty bands with increasing precipitation shows that bias corrected model predictions are worse for higher precipitation rates. Also, the red (median) line doesn't extend as far as the blue line which shows some predictions are much lower than the corresponding BoM measurements. 
+
+Note that the uncertainty bands do not extend as far as the median line because there is insufficient data to calculate them (ie. few high rainfall predictions).
+
+```{r conditonalEval, echo = FALSE}
+conditionalQuantile(mod.dat[!is.na(Koppen), ], bins = 50, obs = "obs", mod = "corrected", type = "Month")
+```
+
+## Model fit
+
+Now we can assess the effects of the bias correction by comparing a suite of model evaluation statistics between the `downTrace` and `downTrace_corrected` datasets against the `BoM` data.
+
+```{r modelFit}
+modStats(mod.dat[!is.na(Koppen), ],
+         obs = "obs", mod = "uncorrected", 
+         statistic = c("n", "IOA", "r", "RMSE"),
+         type = "Month")
+modStats(mod.dat[!is.na(Koppen), ],
+         obs = "obs", mod = "corrected", 
+         statistic = c("n", "IOA", "r", "RMSE"),
+         type = "Month")
+```
+
+And here are the same model fits for `month` within each `Koppen` zone
+
+```{r modelFitKoppenMonth}
+modStats(mod.dat[!is.na(Koppen), ],
+         obs = "obs", mod = "uncorrected", 
+         statistic = c("n", "IOA", "r", "RMSE"),
+         type = c("Month", "Koppen"))
+modStats(mod.dat[!is.na(Koppen), ],
+         obs = "obs", mod = "corrected", 
+         statistic = c("n", "IOA", "r", "RMSE"),
+         type = c("Month", "Koppen"))
+```
+
+```{r modFitKoppen}
+modStats(mod.dat[!is.na(Koppen), ],
+         obs = "obs", mod = "uncorrected", 
+         statistic = c("n", "IOA", "r", "RMSE"),
+         type = "Koppen")
+modStats(mod.dat[!is.na(Koppen), ],
+         obs = "obs", mod = "corrected", 
+         statistic = c("n", "IOA", "r", "RMSE"),
+         type = "Koppen")
 ```
 
