@@ -219,7 +219,7 @@ for var in "${variables[@]}"; do
     # create temp file and output
     tmp_outvar=$(mktemp --suffix "_${var}_concat.nc")
     outfile="${out_dir}/out/${var}/TraCE_22ka_downscaled_${var}_decadal_21k_1500CE_biascorr.nc"
-    echo -e "${BLUE}    Outfile: $(basename $outfile)${RESET}"
+    echo -e "${BLUE}    Outfile: $(basename "$(dirname "$outfile")")/$(basename "$outfile")${RESET}"
     # store input order for debugging
     find "${input_base}"/*/out/"${var}" -type f -name '*biascorr.nc' | sort -V >"${out_dir}/${var}_concat_input_order.txt"
     # concat with CDO
@@ -250,14 +250,14 @@ for var in "${vars[@]}"; do
 done
 
 # Now pass the split files through the R script to correct the time-index
-conda deactivate # need to deactivate the nco_stable env to use R
+conda deactivate # deactivate the nco_stable env to use R
 for var in "${vars[@]}"; do
     echo -e "${GREEN}Processing $var...${RESET}"
-    files=$(ls ${base_dir}/${var}/*.nc | grep "biascorr\\.nc$")
+    files=$(ls "${base_dir}/${var}"/*.nc | grep -E "biascorr(_[0-9]+)?\.nc$")
     for f in $files; do
-        echo -e "${YELLOW} Processing $(basename "$f")...${RESET}"
+        echo -e "${YELLOW} Processing $(basename "$(dirname "$f")")/$(basename "$f")...${RESET}"
         Rscript /home/dafcluster4/Documents/GitHub/TraCE_Sahul/01_code/01_Decadal_pre1500/06_split_and_add_timedims.R "$f"
-        echo -e "${YELLOW} Finished $(basename "$f")...${RESET}"
+        echo -e "${YELLOW} Finished $(basename "$(dirname "$f")")/$(basename "$f")...${RESET}"
     done
     echo -e "${GREEN}Finished $var...${RESET}"
 done
