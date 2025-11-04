@@ -237,16 +237,29 @@ for var in "${variables[@]}"; do
     echo -e "${GREEN}Finished variable: ${var}${RESET}"
 done
 
-# split the decadal data into 12 files 
-split_num=2155
+# Split the files into chunks
 base_dir="/media/dafcluster4/storage/TraCE_22k_1500CE/out"
 vars=(pr tasmax tasmin)
 
+# split the decadal data into 6 files
+chunk_sizes=(4812 4812 4812 4812 4812 1800) # final chunk will contain only 1800 layers
+
 for var in "${vars[@]}"; do
     infile="${base_dir}/${var}/TraCE_22ka_downscaled_${var}_decadal_21k_1500CE_biascorr.nc"
-    outfile="${base_dir}/${var}/TraCE_22ka_downscaled_${var}_decadal_21k_1500CE_biascorr_"
     echo -e "${GREEN}Splitting $var...${RESET}"
-    cdo -f nc4 -P 100 -L -splitsel,${split_num} "$infile" "$outfile"
+    start=1
+    chunk_id=1
+    for chunk in "${chunk_sizes[@]}"; do
+        end=$(( start + chunk - 1 ))
+        outfile="${base_dir}/${var}/TraCE_22ka_downscaled_${var}_decadal_21k_1500CE_biascorr_$(printf "%02d" $chunk_id).nc"
+        echo -e "${YELLOW}      Creating $(basename "$(dirname "$outfile")")/$(basename "$outfile") (time ${start}-${end}${RESET})"
+        # Use CDO to extract the chunk range
+        cdo -f nc4 -P 100 -L seltimestep,${start}/${end} "$infile" "$outfile"
+        start=$(( end + 1 ))
+        ((chunk_id++))
+    done
+    echo "  Final timestep processed: $end"
+    echo -e "${GREEN}Finished $var...${RESET}"
 done
 
 # Now pass the split files through the R script to correct the time-index
@@ -255,9 +268,9 @@ for var in "${vars[@]}"; do
     echo -e "${GREEN}Processing $var...${RESET}"
     files=$(ls "${base_dir}/${var}"/*.nc | grep -E "biascorr(_[0-9]+)?\.nc$")
     for f in $files; do
-        echo -e "${YELLOW} Processing $(basename "$(dirname "$f")")/$(basename "$f")...${RESET}"
+        echo -e "${YELLOW}      Processing $(basename "$(dirname "$f")")/$(basename "$f")...${RESET}"
         Rscript /home/dafcluster4/Documents/GitHub/TraCE_Sahul/01_code/01_Decadal_pre1500/06_split_and_add_timedims.R "$f"
-        echo -e "${YELLOW} Finished $(basename "$(dirname "$f")")/$(basename "$f")...${RESET}"
+        echo -e "${YELLOW}      Finished $(basename "$(dirname "$f")")/$(basename "$f")...${RESET}"
     done
     echo -e "${GREEN}Finished $var...${RESET}"
 done
