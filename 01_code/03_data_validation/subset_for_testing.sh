@@ -40,3 +40,17 @@ for var in "${vars[@]}"; do
     done
     echo -e "${GREEN}Finished $var...${RESET}"
 done
+
+# Now pass the split files through the R script to correct the time-index which 
+# would have been reset from the CDO subsetting
+conda deactivate # deactivate the nco_stable env to use R
+for var in "${vars[@]}"; do
+    echo -e "${GREEN}Processing $var...${RESET}"
+    files=$(ls "${base_dir}/${var}"/*.nc | grep -E "biascorr(_[0-9]+)?\.nc$")
+    for f in $files; do
+        echo -e "${YELLOW}      Processing $(basename "$(dirname "$f")")/$(basename "$f")...${RESET}"
+        Rscript /home/dafcluster4/Documents/GitHub/TraCE_Sahul/01_code/01_Decadal_pre1500/06_split_and_add_timedims.R "$f"
+        echo -e "${YELLOW}      Finished $(basename "$(dirname "$f")")/$(basename "$f")...${RESET}"
+    done
+    echo -e "${GREEN}Finished $var...${RESET}"
+done
