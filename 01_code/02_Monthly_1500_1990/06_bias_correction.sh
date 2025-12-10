@@ -24,21 +24,17 @@ for var in "${variables[@]}"; do
         echo "Delta file for variable '$var' not found."
         continue
     fi
-
     echo "Processing variable: $var"
     echo "Input: $input_file"
     echo "Delta: $delta_file"
-
     # make temporary files
     tmp_unpacked=$(mktemp --suffix "_${var}_unpacked.nc")
     tmp_delta=$(mktemp --suffix "_${var}_remap.nc")
     tmp_biascorr=$(mktemp --suffix "_${var}_biascorr.nc")
     grid_desc=$(mktemp --suffix ".txt")
-
     # unpack input to remove offset and scale
     echo "Unpacking ${input_file} to ${tmp_unpacked}..."
     cdo -L -w -P 100 -b F32 unpack "$input_file" "$tmp_unpacked"
-
     # remap delta to ensure that grids align
     # Could/should probably use remapnn as there should be no actual regridding?
     if [[ $var == "pr" ]]; then
@@ -56,7 +52,6 @@ for var in "${variables[@]}"; do
     fi
     cdo griddes "$input_file" >"$grid_desc"
     cdo -P 100 -s -w "$remap_method","$grid_desc" "$delta_file" "$tmp_delta"
-
     # apply the bias correction
     echo "Applying bias correction..."
     if [[ $var == "pr" ]]; then

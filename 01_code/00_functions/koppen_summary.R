@@ -9,7 +9,6 @@ koppen_summary <- function(grids) {
       crs(vj) <- "EPSG:4326"
       zt <- time(vj)
       units(vj) <- vju
-      # convert to degC if appropriate
       vj_units <- tryCatch(terra::units(vj)[1], error = function(e) NULL)
       vj_units <- if (!is.null(vj_units) && trimws(vj_units) != "") trimws(vj_units) else NULL
       if (!is.null(vj_units)) {

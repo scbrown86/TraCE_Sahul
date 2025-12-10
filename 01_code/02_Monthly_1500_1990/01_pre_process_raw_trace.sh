@@ -10,7 +10,7 @@ cd "$base_dir" || exit 1
 
 # Loop over each subdirectory
 for folder in */; do
-    var="${folder%/}" # Remove trailing slash to get the variable name
+    var="${folder%/}"
     if [[ "$var" == "LANDFRAC" ]]; then
         continue
     fi

@@ -30,7 +30,6 @@ downscale_bias_correct <- function(x, delta_sds, convert_to_annual = FALSE,
     names(delta_idx) <- month.abb
     didx <- which(names(delta_idx) == month)
     if (v == "pr") {
-      # convert to mm/month
       dmon <- c(31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)[didx]
       ingrid <- ingrid*(86400*dmon)
       ingrid <- ifel(ingrid < 5, 5, ingrid)
@@ -48,7 +47,6 @@ downscale_bias_correct <- function(x, delta_sds, convert_to_annual = FALSE,
       EPSILON = 0.000100,
       LEVEL_MAX = 14,
       TARGET_OUT_GRID = tmp_r)
-    # if error, try a second time
     if (!is.null(bspline$error) & first) {
       first <- FALSE
       bspline <- safe_spline(
@@ -64,14 +62,10 @@ downscale_bias_correct <- function(x, delta_sds, convert_to_annual = FALSE,
         TARGET_OUT_GRID = tmp_r)
     }
     if (is.null(bspline$error)) {
-      # extract raster
       b <- qgis_as_terra(bspline$result)*1
-      # apply correction
       if (var == "pr") {
         b <- ifel(b < 1, 1, b)
-        # convert to back to kg/m2/2
         b <- b/(86400*dmon)
-        # bias correction
         b <- b * delta_idx
       } else if (var %in% c("tasmin", "tasmax", "tas")) {
         b <- b + delta_idx
@@ -80,7 +74,6 @@ downscale_bias_correct <- function(x, delta_sds, convert_to_annual = FALSE,
       varnames(b) <- var
       units(b) <- units(ingrid)
       names(b) <- format(time(b), "%b%Y")
-      # write
       writeRaster(b,
                   filename = sprintf("scratch/%s_biascorr_%04d.tif", v, i),
                   gdal = c("COMPRESS=LZW", "TFW=NO", "PREDICTOR=3"))
@@ -106,16 +99,11 @@ downscale_bias_correct <- function(x, delta_sds, convert_to_annual = FALSE,
 
 # check dates
 is_monthly <- function(date_vector) {
-  # Convert character dates to Date format
   dates <- as.Date(date_vector, format = "%Y-%m-%d")
-  # Extract unique year-month combinations
   year_months <- unique(format(dates, "%Y-%m"))
-  # Check if the difference between consecutive months is exactly 1
   if (length(year_months) < 2) {
-    return(TRUE)  # If there's only one unique month, it's trivially monthly
+    return(TRUE)
   }
-  # Convert year-months to Date format (first day of the month)
   ym_dates <- as.Date(paste0(year_months, "-01"))
-  # Check if all differences between months are nominally 4 weeks
   return(all(round(diff(ym_dates, units = "weeks")) == as.difftime(4, units = "weeks")))
 }

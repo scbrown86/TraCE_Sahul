@@ -18,7 +18,6 @@ fil <- args[1] # from arguments on command line
 
 # read the timesteps
 time_steps <- fread("/home/dafcluster4/Documents/GitHub/TraCE_Sahul/02_data/downTrace_timesteps_paleoDecades.csv")
-# time_steps
 
 # open the file and extract number of steps
 f <- nc_open(fil, write = TRUE)

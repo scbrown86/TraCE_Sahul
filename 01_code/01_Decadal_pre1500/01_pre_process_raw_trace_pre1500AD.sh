@@ -9,7 +9,7 @@ ncremap -g ~/Documents/GitHub/TraCE_Sahul/02_data/sahul_coarse.nc -G latlon=17,1
 
 ncremap -a bilinear -V Z3 --preserve=mean -R '--rgn_dst --rnr_thr=0.0' \
     -g ~/Documents/GitHub/TraCE_Sahul/02_data/sahul_coarse.nc \
-    -s /home/dafcluster4/Desktop/TraCE_Data/raw/monthly/others/trace.36.400BP-1990CE.cam2.h0.Z3.2160101-2204012.nc \
+    -s /mnt/Data/TraCE21/raw/monthly/others/trace.36.400BP-1990CE.cam2.h0.Z3.2160101-2204012.nc \
     -m ~/Documents/GitHub/TraCE_Sahul/02_data/trace_to_sahul_coarse_bilin.nc \
     -o ~/Documents/GitHub/TraCE_Sahul/02_data/temp_output.nc
 

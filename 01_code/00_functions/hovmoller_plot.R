@@ -16,7 +16,6 @@ hovmoller_plot <- function(ras, zones = NULL, fun = mean, value_name = "value",
   if (value_name != "value") {
     data.table::setnames(zonal_means, value_name, "value")
   }
-  # make the plot
   ggplot(zonal_means) +
     geom_raster(aes(x = time, y = lat, fill = value)) +
     scale_fill_gradientn(

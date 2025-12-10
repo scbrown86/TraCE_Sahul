@@ -29,7 +29,7 @@ taylor_from_spatraster_zones <- function(obs, mod, zones = NULL, add = FALSE,
   if (!is.null(sig_digits) &&
       (!is.numeric(sig_digits) || length(sig_digits) != 1L || sig_digits < 1))
     stop("'sig_digits' must be a single positive integer or NULL.")
-  ## helper for optional rounding -----------------
+  ## helper for optional rounding
   round_sig <- function(x) {
     if (is.null(sig_digits)) x else signif(x, sig_digits)
   }
@@ -67,19 +67,15 @@ taylor_from_spatraster_zones <- function(obs, mod, zones = NULL, add = FALSE,
     zone_mask <- ifel(zones == zone_val, 1, NA)
     obs_masked <- mask(obs, zone_mask)
     mod_masked <- mask(mod, zone_mask)
-
     if (!is.null(doagg)) {
       obs_masked <- terra::aggregate(obs_masked, fact = doagg, na.rm = TRUE)
       mod_masked <- terra::aggregate(mod_masked, fact = doagg, na.rm = TRUE)
     }
-
     obs_vals <- values(obs_masked, mat = FALSE)
     mod_vals <- values(mod_masked, mat = FALSE)
-
     valid_idx <- complete.cases(obs_vals, mod_vals)
     obs_clean <- round_sig(obs_vals[valid_idx])
     mod_clean <- round_sig(mod_vals[valid_idx])
-
     if (length(obs_clean) < 2 || length(mod_clean) < 2) {
       warning(paste("Zone", zone_val, "has insufficient valid data and was skipped."))
       next
@@ -108,7 +104,6 @@ taylor_from_sds_monthly <- function(obs_sds, mod_sds, var_name, zones = NULL,
                                     add = FALSE, col_palette = NULL,
                                     sig_digits = NULL, zone_names = NULL,
                                     doagg = NULL, ...) {
-  # ----- Checks -----
   if (!inherits(obs_sds, "SpatRasterDataset") || !inherits(mod_sds, "SpatRasterDataset")) {
     stop("Both 'obs_sds' and 'mod_sds' must be terra::sds objects.")
   }
@@ -123,11 +118,9 @@ taylor_from_sds_monthly <- function(obs_sds, mod_sds, var_name, zones = NULL,
     if (length(col_palette) > 1) return(col_palette[i])
     return(col_palette)
   }
-
   round_sig <- function(x) {
     if (is.null(sig_digits)) x else signif(x, sig_digits)
   }
-
   # Extract var from each sds and mask if needed
   obs_stack <- obs_sds[[var_name]]
   mod_stack <- mod_sds[[var_name]]
@@ -141,11 +134,9 @@ taylor_from_sds_monthly <- function(obs_sds, mod_sds, var_name, zones = NULL,
   }
   month_labels <- month.abb
   plot_index <- 1  # to control `add` to existing plot
-
   for (i in 1:12) {
     obs_layer <- obs_stack[[i]]
     mod_layer <- mod_stack[[i]]
-
     if (!is.null(zones)) {
       # Zonal version
       zone_vals  <- sort(unique(na.omit(values(zones))))

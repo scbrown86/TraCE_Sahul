@@ -54,11 +54,9 @@ for chunk_dir in "${input_base}"/[0-9][0-9][0-9][0-9][0-9]_[0-9][0-9][0-9][0-9][
     # Concatenate inputs within each chunk
     for var in "${variables[@]}"; do
         var_dir="${out_dir}/${var}"
-
         if [[ $var == "tas" ]]; then
             tasmax_dir="${out_dir}/tasmax"
             tasmin_dir="${out_dir}/tasmin"
-
             # check the number of files before processing any further
             nfiles_tasmax=$(find "$tasmax_dir" -maxdepth 1 -type f -name "*.nc" | wc -l)
             if [[ $nfiles_tasmax -ne 12 ]]; then
@@ -150,7 +148,6 @@ for chunk_dir in "${input_base}"/[0-9][0-9][0-9][0-9][0-9]_[0-9][0-9][0-9][0-9][
                 -a long_name,tasmax,o,c,"Daily Maximum Near-Surface Air Temperatures" \
                 -a standard_name,tasmax,o,c,"maximum_air_temperature" \
                 "$tmp_biascorr_tasmax"
-
             cdo -O -b F32 -P 100 -s -w \
                 -setunit,"Celcius" -setname,"tasmin" \
                 -sub "$tmp_biascorr" "$tmp_biascorr_halfdtr" \
@@ -243,7 +240,6 @@ vars=(pr tasmax tasmin)
 
 # split the decadal data into 6 files
 chunk_sizes=(4812 4812 4812 4812 4812 1800) # final chunk will contain only 1800 layers
-
 for var in "${vars[@]}"; do
     infile="${base_dir}/${var}/TraCE_22ka_downscaled_${var}_decadal_21k_1500CE_biascorr.nc"
     echo -e "${GREEN}Splitting $var...${RESET}"

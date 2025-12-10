@@ -11,12 +11,16 @@ template <- crop(template, ext(105, 161.25, -50, 10), snap = "out")
 template
 
 # Keep bathy
-elev <- rast(lapply(list.files("/media/dafcluster4/storage/Ice5g/", full.names = TRUE, pattern = ".nc$"), function(i) rast(i, "orog")))
+elev <- rast(lapply(list.files("/media/dafcluster4/storage/Ice5g/", 
+                               full.names = TRUE, pattern = ".nc$"),
+                    function(i) rast(i, "orog")))
 elev <- crop(rotate(elev), ext(105.0, 161.25, -52.5, 11.25), snap = "out")
 elev
 
 # timesteps based on filenames
-years <- as.numeric(sub(".*_([0-9]+\\.[0-9]+)k_.*", "\\1", list.files("/media/dafcluster4/storage/Ice5g/", full.names = FALSE, pattern = ".nc$")))*1000
+years <- as.numeric(sub(".*_([0-9]+\\.[0-9]+)k_.*", "\\1", 
+                        list.files("/media/dafcluster4/storage/Ice5g/", 
+                                   full.names = FALSE, pattern = ".nc$")))*1000
 years*-1
 time(elev) <- years
 
@@ -31,7 +35,8 @@ elev_interp <- setValues(elev_interp, round(values(elev_interp), 2))
 elev_interp
 idx <- which(rcarbon::BPtoBCAD(seq(0, 22000, 10)) < 1500)
 elev_interp <- elev_interp[[idx]] #2155
-elev_interp <- elev_interp[[rev(1:nlyr(elev_interp))]] # reverse order so 1490CE/460BP is last
+# reverse order so 1490CE/460BP is last
+elev_interp <- elev_interp[[rev(1:nlyr(elev_interp))]]
 time(elev_interp) <- rcarbon::BPtoBCAD(time(elev_interp))
 elev_interp
 
@@ -40,11 +45,11 @@ plot(elev_interp[[c(1, 500, 1000, 1500, 2000, 2500)]],
      col = hcl.colors(100, "Batlow"),
      fun = function() lines(land))
 
-landmask <- rast("/mnt/Data/TraCE21_Sahul/LANDFRAC/trace.01-36.22000BP.cam2.LANDFRAC.22000BP_decavg_400BCE.Sahul.preProc.nc", "LANDFRAC") #2204
+landmask <- rast("/mnt/Data/TraCE21_Sahul/LANDFRAC/trace.01-36.22000BP.cam2.LANDFRAC.22000BP_decavg_400BCE.Sahul.preProc.nc", "LANDFRAC")
 time(landmask) <- seq(from = 22000, length = 2204, by = -10)
-landmask <- landmask[[which(seq(from = 22000, length = 2204, by = -10) >= 0)]] #2201
+landmask <- landmask[[which(seq(from = 22000, length = 2204, by = -10) >= 0)]]
 idx <- which(rcarbon::BPtoBCAD(seq(22000, 0, -10)) < 1500)
-landmask <- landmask[[idx]] #2155
+landmask <- landmask[[idx]]
 time(landmask) <- time(elev_interp)
 landmask
 
@@ -66,28 +71,32 @@ landmask_fine <- project(landmask, elev_interp, method = "near")
 plot(landmask_fine[[c(1, 2155)]], fun = function() lines(land))
 
 plot(merge(
-  mask(project(mask(elev_interp[[2155]], landmask_fine[[2155]]), landmask[[2155]], "average"), landmask[[2155]]),
-  mask(project(mask(elev_interp[[2155]], landmask_fine[[2155]], inverse = TRUE), landmask[[2155]], "average"),
-    landmask[[2155]],
-    inverse = TRUE
-  )), fun = function() lines(land))
+  mask(project(mask(elev_interp[[2155]], landmask_fine[[2155]]), 
+               landmask[[2155]], "average"), landmask[[2155]]),
+  mask(project(mask(elev_interp[[2155]], landmask_fine[[2155]], 
+                    inverse = TRUE), landmask[[2155]], "average"),
+       landmask[[2155]],
+       inverse = TRUE
+  )), 
+  fun = function() lines(land))
 
 identical(time(elev_interp), time(landmask_fine))
 
 elev_coarse <- merge(
   mask(project(mask(elev_interp, landmask_fine), landmask, "max"), landmask),
-  mask(project(mask(elev_interp, landmask_fine, inverse = TRUE), landmask, "average"),
-    landmask,
-    inverse = TRUE))
+  mask(project(mask(elev_interp, landmask_fine, inverse = TRUE), 
+               landmask, "average"),
+       landmask,
+       inverse = TRUE))
 elev_coarse
 elev_coarse <- setValues(elev_coarse, round(values(elev_coarse), 2))
 plot(elev_coarse[[c(1, 2155)]],
-  breaks = c(-Inf, 0, Inf),
-  fill_range = TRUE,
-  fun = function() {
-    lines(as.polygons(landmask[[c(1, 2155)]]), lwd = 1.5)
-    lines(land)
-  })
+     breaks = c(-Inf, 0, Inf),
+     fill_range = TRUE,
+     fun = function() {
+       lines(as.polygons(landmask[[c(1, 2155)]]), lwd = 1.5)
+       lines(land)
+     })
 
 # writeCDF
 names(elev_coarse) <- rcarbon::BCADtoBP(time(elev_coarse))

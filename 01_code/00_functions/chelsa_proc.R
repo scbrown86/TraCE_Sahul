@@ -1,5 +1,5 @@
 chelsa_proc <- function(variable, dir, outdir, type = "\\.tif$",
-                        mask = NULL, # wrap(land),
+                        mask = NULL,
                         ymin = 1980, ymax = 1989,
                         tras_ext = ext(105, 160, -50, 7), # Sahul
                         cores = 10L, load_exist = TRUE,
@@ -8,7 +8,7 @@ chelsa_proc <- function(variable, dir, outdir, type = "\\.tif$",
   require(gtools)
   require(terra)
   match.arg(arg = variable, choices = c("prec", "tmax", "tmin", "tmean"))
-  v1 <- variable # keep old variable name
+  v1 <- variable
   from <- c("prec", "tmax", "tmin", "tmean")
   to <- c("pr", "tasmax", "tasmin", "tas")
   variable <- to[match(v1, from)]
@@ -29,8 +29,6 @@ chelsa_proc <- function(variable, dir, outdir, type = "\\.tif$",
     }
     # load and crop to AOI
     chelsa <- rast(fil.list.annual, win = tras_ext, snap = "out")
-    # crop CHELSA to extent of template raster and load into memory
-    # chelsa <- crop(chelsa, tras_ext, snap = "out")
     if (!is.null(mask)) {
       if (inherits(x = mask, "PackedSpatVector")) {
         mask <- terra::unwrap(mask)
@@ -38,20 +36,15 @@ chelsa_proc <- function(variable, dir, outdir, type = "\\.tif$",
       chelsa <- terra::mask(chelsa, mask, touches = TRUE)
     }
     if (variable == "pr") {
-      # stored as kg/m2 (i.e mm/month)
-      # need to convert to kg/m2/s (x/conv_rate)
       # conv_rate = 24(hours)*3600(seconds in hour) = [86400] * num_days_in_month
       conv_rate <- (86400 * c(31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31))
-      # pr files not reading fill value correctly. Remove here
       chelsa <- ifel(chelsa == 65535, NA, chelsa)
-      # convert
       chelsa <- (chelsa / conv_rate)
       units(chelsa) <- "kg m-2 s-1"
       varnames(chelsa) <- variable
       time(chelsa) <- seq(as.Date(paste0(year, "-01-16")), by = "months", l = 12)
       names(chelsa) <- format(time(chelsa), "%b%Y")
     } else if (variable %in% c("tasmin", "tasmax", "tas")) {
-      # stored as K/10. Convert to celcius
       chelsa <- setValues(chelsa, round((terra::values(chelsa) / 10) - 273.15, 2))
       units(chelsa) <- "deg_C"
       varnames(chelsa) <- variable
