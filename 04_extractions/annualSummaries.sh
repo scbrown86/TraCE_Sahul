@@ -13,6 +13,7 @@ base_dir="/mnt/Data/TraCE-Sahul"
 out_base="/home/dafcluster4/Desktop/TraCESahul_annSummaries"
 vars=(pr tasmax tasmin)
 
+# decadal data (21k BP to 1500 CE)
 for var in "${vars[@]}"; do
   echo -e "${GREEN}Processing ${var}...${RESET}"
 
@@ -55,4 +56,35 @@ for var in "${vars[@]}"; do
   done
 
   echo -e "${GREEN}Finished ${var}.${RESET}"
+done
+
+# 1500 - 1989
+for var in "${vars[@]}"; do
+  echo -e "${GREEN}Processing ${var} biascorr file...${RESET}"
+  indir="${base_dir}/${var}"
+  outdir="${out_base}/${var}"
+  mkdir -p "${outdir}"
+  for f in "${indir}"/*_biascorr.nc; do
+    [ -e "${f}" ] || continue
+    bn="$(basename "${f}")"
+    outfil="${outdir}/${bn%.nc}_ann.nc"
+    echo -e "${YELLOW} Processing ${var}/${bn}...${RESET}"
+    if [ "${var}" = "tasmin" ] || [ "${var}" = "tasmax" ]; then
+      cdo -s -w -f nc4 -b F32 -P 100 \
+        yearmean \
+        "${f}" "${outfil}"
+    elif [ "${var}" = "pr" ]; then
+      # Monthly mean flux (kg m-2 s-1) -> annual total (mm/year), with CF-compliant time axis
+      cdo -s -w -f nc4 -b F32 -P 100 \
+        yearsum \
+        -muldpm \
+        -mulc,86400 \
+        "${f}" "${outfil}"
+    else
+      echo -e "${RED}Unknown variable ${var}; skipping.${RESET}"
+      continue
+    fi
+    echo -e "${YELLOW} Finished ${var}/${bn} -> $(basename "${outfil}")${RESET}"
+  done
+  echo -e "${GREEN}Finished ${var} biascorr file.${RESET}"
 done
