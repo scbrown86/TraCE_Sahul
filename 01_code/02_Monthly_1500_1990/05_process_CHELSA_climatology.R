@@ -187,7 +187,7 @@ if (!all(file.exists(chelsa_climatologies))) {
 #
 # _________________________________________________________________________
 
-# convert the CHELSA climatology data to 0.5 degree using b-splines
+# convert the CHELSA climatology data to 0.05 degree using b-splines
 source("01_code/00_functions/interpolate_bspline.R")
 
 # multilevel b-spline to 0.05°

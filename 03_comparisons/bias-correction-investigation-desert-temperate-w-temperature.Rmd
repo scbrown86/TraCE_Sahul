@@ -1,0 +1,630 @@
+---
+title: "TraCE-21ka bias correction checks for desert and temperate zones"
+date: "2026-03-08"
+output: 
+  html_document: 
+    highlight: tango
+    theme: cosmo
+    fig_width: 12
+    fig_height: 12
+---
+
+```{r setup, include=TRUE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE, cache = TRUE)
+library(terra)
+library(pbapply)
+library(data.table)
+library(openair)
+library(ggplot2)
+
+knitr::opts_chunk$set(cache = TRUE, fig.align = 'center', 
+                      fig.width = 12, fig.height = 12)
+
+land <- vect(rnaturalearthhires::countries10)
+land <- crop(land, ext(106, 155, -50, 7))
+land <- land[land$ADMIN == "Australia", ]
+land <- aggregate(land)
+
+# template raster at 0.05° res to make sure that
+# anomalies etc. match the extent and res of our outputs
+rast_template <- rast(res = 0.05, crs = "EPSG:4326", vals = 0L,
+                      extent = ext(land))
+```
+
+# Bias correction issues with downscaled TraCE-21ka data
+
+We've had issues with the temperate and desert zones where annual total precipitation is not matching the observed climatology data, and is being vastly under/over estimated. I've attempted to fix the issue by altering the bias correction calculation.
+
+The previous bias correction (following Karger et al.) was as follows
+
+1)  Take fine scale modelled raster climatology data at 5km, and using multilevel b-splines upscale to 50km
+2)  Take fine scale observation raster climatology data at 1km, and using multilevel b-splines upscale to 50km
+3)  Calculates a simple delta ratio of `ratio = (upscale_observation + eps)/ (upscale_modelled + eps)`, where eps is a constant to avoid division by zero
+4)  Downscale the ratio back to 5km using bilinear or multilevel b-splines
+5)  Correct the monthly modelled raster using the ratio correction
+
+The approach being tested here is as follows
+
+1)  Take fine scale modelled raster climatology data at 5km, and "extend" the grid using multilevel b-splines at 5km
+2)  Take fine scale observation raster climatology data at 1km, and upscale to 5km using conservative remapping (`cdo remapcon`)
+3)  Take the 5km upscaled observation data and extend the grid using multilevel b-splines at 5km
+4)  Calculates a simple delta ratio of `ratio = (upscale_observation + eps)/ (upscale_modelled + eps)`, where eps is a constant to avoid division by zero
+5)  Correct the monthly modelled raster using the ratio correction
+
+I believe that the original method used by Karger et al., where data is upscaled and then the ratio is downscaled back to the target resolution introduces too much smoothing, scale-mismatch, and non-linear aggregation problems (and creates ratio instabilities where modelled values are small). This led to some locations ending up very poorly corrected while others look fine. A safer, simpler alternative is to compute the correction at the target resolution we actually want to correct (i.e. 5 km): upscale the observations from 1 km → 5 km and compute the ratio at 5 km, then apply that ratio to the 5 km modelled data.
+
+## Perform the bias correction
+
+I have already generated the necessary ratio change factor data, so here I will read in the downTrace data for 1900-1989 and apply the bias correction to Australia.
+
+I also load in the Koppen climate zone data
+
+```{r downTraceAus}
+# Load in Koppen climate zones
+koppen <- rast("02_data/01_inputs/koppen_zones_raster.tif")
+koppen <- project(koppen, rast_template, method = "near")
+koppen <- mask(koppen, project(land, koppen), touches = TRUE)
+has.colors(koppen)
+kd <- data.frame(
+  id = 1:6,
+  Koppen = c(
+    "Temperate", "Grassland", "Desert",
+    "Subtropical", "Tropical", "Equatorial"
+  )
+)
+levels(koppen) <- kd
+koppen
+plot(koppen)
+
+# Load in the downTrace data for 1900 - 1989
+downTrace_pr <- rast("/media/dafcluster4/storage/TraCE_1500_1990CE/1500_1990/out/pr/TraCE_downscaled_1500_1990_concat.nc",
+                  lyrs = 4801:5880, win = ext(koppen))
+time(downTrace_pr) <- seq(as.Date("1900-01-16"), by = "month", length = nlyr(downTrace_pr))
+downTrace_pr
+
+# plot of avg daily rainfall for 1980-1989
+panel(tapp(downTrace_pr[[961:1080]], "months", mean)*86400,
+     fun = function() lines(land),
+     main = month.abb,
+     range = c(0, 10), fill_range = TRUE,
+     col = cptcity::cpt("wkp_precip_wiki_precip_mm", n = 50))
+
+# Load in the min and max temp too
+downTrace_tmx <- rast("/media/dafcluster4/storage/TraCE_1500_1990CE/1500_1990/out/tasmax/TraCE_22ka_downscaled_tasmax_1500_1990_biascorr.nc",
+                  lyrs = 4801:5880, win = ext(koppen))
+downTrace_tmn <- rast("/media/dafcluster4/storage/TraCE_1500_1990CE/1500_1990/out/tasmin/TraCE_22ka_downscaled_tasmin_1500_1990_biascorr.nc",
+                  lyrs = 4801:5880, win = ext(koppen))
+time(downTrace_tmx) <- time(downTrace_tmn) <- time(downTrace_pr)
+downTrace_tmx
+```
+
+Now I load in the bias correction ratios for precip
+
+```{r loadBias}
+ratio_correction <- rast("02_data/02_processed/deltas/delta_fine_delta_pr_climatology_ncdf4.nc",
+                         win = ext(downTrace_pr))
+ratio_correction
+
+panel(ratio_correction, fun = function() lines(land),
+     range = c(0, 2), fill_range = TRUE,
+     main = month.abb,
+     breaks = seq(0, 2, by = 0.1),
+     col = hcl.colors(20, "Spectral"))
+```
+
+And now we can apply the bias correction. Because the `ratio_correction` is the correction for each month, the layers are "recycled" across the `downTrace` data so each month has the correct transformation applied.
+
+```{r applyBias}
+downTrace_pr_corrected <- downTrace_pr * ratio_correction
+
+# Here we threshold the data.
+## Anything less than 0.1mm/day (1.157e-6 kg m-2 s-1), becomes 0mm/day
+# 0.1mm/day = 0.0001 m-2 / 86400 s = 1.157e-9 m-2 s-1 * 1000 kg = 1.157e-6 kg m-2 s-1
+thresh <- ((0.1 / 1000) / 86400) * 1000
+downTrace_pr_corrected <- ifel(downTrace_pr_corrected < thresh, 0, downTrace_pr_corrected)
+
+units(downTrace_pr_corrected) <- units(downTrace_pr)
+downTrace_pr_corrected # kg m-2 s-1
+
+# plot of avg daily rainfall for 1980-1989
+panel(tapp(downTrace_pr_corrected[[961:1080]], "months", mean)*86400,
+     fun = function() lines(land),
+     main = month.abb,
+     range = c(0, 10), fill_range = TRUE,
+     col = cptcity::cpt("wkp_precip_wiki_precip_mm", n = 50))
+```
+
+## Extract time series within each Koppen zone
+
+Now we can extract the corrected precipitation values for the downTrace simulation from within each climate zone.
+
+```{r summaryFunc}
+# Compute areal averages across zones, or across the entire Sahul area
+get_summary_stats <- function(r, timevec, varname, koppen = NULL) {
+  require(data.table)
+  if (is.null(koppen)) {
+    means <- global(r, "mean", na.rm = TRUE)[, 1]
+    sds <- global(r, "sd", na.rm = TRUE)[, 1]
+    return(data.table(time = timevec, mean = means, sd = sds, variable = varname))
+  } else {
+    zones <- unique(values(koppen)) # extract unique values from the raster
+    zones <- zones[!is.na(zones)] # remove NA if present
+    koppen_summary <- pblapply(zones, function(zone) {
+      zone_mask <- ifel(koppen == zone, koppen, NA)
+      r_masked <- mask(r, zone_mask)
+      means <- global(r_masked, "mean", na.rm = TRUE)[, 1]
+      sds <- global(r_masked, "sd", na.rm = TRUE)[, 1]
+      return(data.table(time = timevec, mean = means, sd = sds, variable = varname, zone = zone))
+    })
+    dt <- rbindlist(koppen_summary)
+    category_df <- cats(koppen)[[1]]
+    dt <- merge(dt, category_df, by.x = "zone", by.y = "id", all.x = TRUE)
+    setcolorder(dt, c("time", "mean", "sd", "variable", "Koppen", "zone"))
+    return(dt)
+  }
+}
+
+koppen <- project(koppen, downTrace_pr_corrected, "mode")
+koppen
+
+zseq <- time(downTrace_pr_corrected)
+downTrace_pr_summary <- get_summary_stats(downTrace_pr_corrected, 
+                                       timevec = zseq,
+                                       varname = "pr",
+                                       koppen = koppen)
+downTrace_pr_summary[, Model := "downTrace_corrected"]
+downTrace_pr_summary
+zseq <- time(downTrace_pr)
+downTrace_pr_raw_summary <- get_summary_stats(downTrace_pr, 
+                                       timevec = zseq,
+                                       varname = "pr",
+                                       koppen = koppen)
+downTrace_pr_raw_summary[, Model := "downTrace"]
+downTrace_pr_raw_summary
+
+# and now tmax and tmin
+downTrace_tmx_summary <- get_summary_stats(downTrace_tmx, 
+                                       timevec = zseq,
+                                       varname = "tasmax",
+                                       koppen = koppen)
+downTrace_tmx_summary[, Model := "downTrace_corrected"]
+downTrace_tmx_summary
+
+downTrace_tmn_summary <- get_summary_stats(downTrace_tmn, 
+                                       timevec = zseq,
+                                       varname = "tasmin",
+                                       koppen = koppen)
+downTrace_tmn_summary[, Model := "downTrace_corrected"]
+downTrace_tmn_summary
+
+downTrace_summary <- rbindlist(list(downTrace_pr_summary, downTrace_tmx_summary, downTrace_tmn_summary))
+downTrace_summary
+```
+
+Now we read in some other datasets (BoM, CHELSA, and CHELSA TraCE-21) to make some comparisons across the climate zones
+
+```{r loadBoM}
+# days in month
+dmon <- c(31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
+
+agcd_pr <- rast("/mnt/Data/AusClim/data/processed/AGCD_precip_1910_1989_downTraceGrid.nc",
+             win = ext(koppen))
+agcd_pr <- setValues(agcd_pr, values(agcd_pr) / (dmon * 86400)) # kg m-2 s-1
+varnames(agcd_pr) <- "pr"
+longnames(agcd_pr) <- "precipitation"
+units(agcd_pr) <- units(downTrace_pr)[1]
+time(agcd_pr) <- seq(as.Date("1910-01-16"), by = "month", l = nlyr(agcd_pr))
+agcd_pr
+
+agcd_tmx <- rast("/mnt/Data/AusClim/data/processed/AGCD_tmax_1910_1989_downTraceGrid.nc",
+             win = ext(koppen))
+varnames(agcd_tmx) <- "tasmax"
+longnames(agcd_tmx) <- "max air temp"
+units(agcd_tmx) <- units(downTrace_tmx)[1]
+time(agcd_tmx) <- seq(as.Date("1910-01-16"), by = "month", l = nlyr(agcd_tmx))
+agcd_tmx
+
+agcd_tmn <- rast("/mnt/Data/AusClim/data/processed/AGCD_tmin_1910_1989_downTraceGrid.nc",
+             win = ext(koppen))
+varnames(agcd_tmn) <- "tasmin"
+longnames(agcd_tmn) <- "min air temp"
+units(agcd_tmn) <- units(downTrace_tmx)[1]
+time(agcd_tmn) <- seq(as.Date("1910-01-16"), by = "month", l = nlyr(agcd_tmn))
+agcd_tmn
+
+
+zseq <- time(agcd_pr)
+agcd_summary_pr <- get_summary_stats(agcd_pr, timevec = zseq, varname = "pr",
+                                  koppen = koppen)
+agcd_summary_pr[, Model := "BoM"]
+agcd_summary_pr
+
+zseq <- time(agcd_tmx)
+agcd_summary_tmx <- get_summary_stats(agcd_tmx, timevec = zseq, varname = "tasmax",
+                                  koppen = koppen)
+agcd_summary_tmx[, Model := "BoM"]
+agcd_summary_tmx
+
+agcd_summary_tmn <- get_summary_stats(agcd_tmn, timevec = zseq, varname = "tasmin",
+                                  koppen = koppen)
+agcd_summary_tmn[, Model := "BoM"]
+agcd_summary_tmn
+
+agcd_summary <- rbindlist(list(agcd_summary_pr, agcd_summary_tmx, agcd_summary_tmn))
+```
+
+```{r loadCHELSA}
+# Load in CHELSA baseline data
+source("01_code/00_functions/chelsa_proc.R")
+chelsa_pr <- chelsa_proc("prec",
+  mask = NULL,
+  ymin = 1980, ymax = 1989,
+  tras_ext = ext(downTrace_corrected),
+  load_exist = TRUE,
+  dir = "/mnt/Data/CHELSA/v1.2",
+  outdir = "02_data/02_processed/CHELSA",
+  cores = 5L)
+chelsa_pr <- project(rast(chelsa_pr), downTrace_pr_corrected, method = "average", 
+                     use_gdal = TRUE, threads = TRUE)
+time(chelsa_pr) <- seq(as.Date("1980-01-16"), by = "month", l = nlyr(chelsa_pr))
+varnames(chelsa_pr) <- "pr"
+longnames(chelsa_pr) <- "precipitation"
+units(chelsa_pr) <- units(downTrace_pr)[1]
+chelsa_pr
+
+chelsa_tmx <- chelsa_proc("tmax",
+  mask = NULL,
+  ymin = 1980, ymax = 1989,
+  tras_ext = ext(downTrace_corrected),
+  load_exist = TRUE,
+  dir = "/mnt/Data/CHELSA/v1.2",
+  outdir = "02_data/02_processed/CHELSA",
+  cores = 5L)
+chelsa_tmx <- project(rast(chelsa_tmx), downTrace_pr_corrected, method = "bilinear", 
+                     use_gdal = TRUE, threads = TRUE)
+time(chelsa_tmx) <- seq(as.Date("1980-01-16"), by = "month", l = nlyr(chelsa_tmx))
+varnames(chelsa_tmx) <- "tasmax"
+longnames(chelsa_tmx) <- "max air temp"
+units(chelsa_tmx) <- units(downTrace_tmx)[1]
+chelsa_tmx
+
+chelsa_tmn <- chelsa_proc("tmax",
+  mask = NULL,
+  ymin = 1980, ymax = 1989,
+  tras_ext = ext(downTrace_corrected),
+  load_exist = TRUE,
+  dir = "/mnt/Data/CHELSA/v1.2",
+  outdir = "02_data/02_processed/CHELSA",
+  cores = 5L)
+chelsa_tmn <- project(rast(chelsa_tmn), downTrace_pr_corrected, method = "bilinear", 
+                     use_gdal = TRUE, threads = TRUE)
+time(chelsa_tmn) <- seq(as.Date("1980-01-16"), by = "month", l = nlyr(chelsa_tmn))
+varnames(chelsa_tmn) <- "tasmin"
+longnames(chelsa_tmn) <- "min air temp"
+units(chelsa_tmn) <- units(downTrace_tmx)[1]
+chelsa_tmn
+
+zseq <- time(chelsa_pr)
+chelsa_pr_summary <- get_summary_stats(chelsa_pr, timevec = zseq, varname = "pr",
+                                  koppen = koppen)
+chelsa_pr_summary[, Model := "CHELSA"]
+chelsa_pr_summary
+
+zseq <- time(chelsa_tmx)
+chelsa_tmx_summary <- get_summary_stats(chelsa_tmx, timevec = zseq, varname = "tasmax",
+                                  koppen = koppen)
+chelsa_tmx_summary[, Model := "CHELSA"]
+chelsa_tmx_summary
+
+zseq <- time(chelsa_tmn)
+chelsa_tmn_summary <- get_summary_stats(chelsa_tmn, timevec = zseq, varname = "tasmin",
+                                  koppen = koppen)
+chelsa_tmn_summary[, Model := "CHELSA"]
+chelsa_tmn_summary
+
+chelsa_summary <- rbindlist(list(chelsa_pr_summary, chelsa_tmx_summary, chelsa_tmn_summary))
+chelsa_summary
+```
+
+```{r loadCHELSA-TraCE}
+# Read in the CHELSA-TraCE21k data for 1900-1989
+chelsa_lut <- data.table(
+  ID = 1:221,
+  year_ID = seq(20, -200, by = -1),
+  start_year = seq(1900, by = -100, l = 221),
+  end_year = c(1990, seq(1899, by = -100, l = 220)),
+  kBP = seq(0, by = -0.1, l = 221)
+)
+chelsa_lut[start_year >= 1850, ]
+# List all .tif files in the folder
+chelsa_fil <- mixedsort(list.files("/mnt/Data/CHELSA_Trace21/",
+  pattern = ".tif$",
+  full.names = TRUE
+))
+head(chelsa_fil)
+pattern <- "CHELSA_TraCE21k_[pr]+_([1-9]|1[0-2])_20_V1\\.0\\.tif"
+chelsa_pr <- chelsa_fil[grepl(pattern, chelsa_fil)]
+chelsa_pr
+
+chelsa_pr <- rast(chelsa_pr, win = ext(land))
+chelsa_pr <- project(chelsa_pr, downTrace_pr_corrected, method = "average", 
+                        use_gdal = TRUE, threads = TRUE)
+chelsa_pr <- chelsa_pr / (86400 * dmon)
+varnames(chelsa_pr) <- "pr"
+longnames(chelsa_pr) <- "precipitation"
+units(chelsa_pr) <- units(downTrace_pr)[1]
+time(chelsa_pr) <- seq(as.Date("1950-01-16"), by = "month", l = 12)
+chelsa_pr
+
+pattern <- "CHELSA_TraCE21k_[tasmax]+_([1-9]|1[0-2])_20_V1\\.0\\.tif"
+chelsa_tmx <- chelsa_fil[grepl(pattern, chelsa_fil)]
+chelsa_tmx
+
+chelsa_tmx <- rast(chelsa_tmx, win = ext(land))
+chelsa_tmx <- project(chelsa_tmx, downTrace_pr_corrected, method = "bilinear", 
+                        use_gdal = TRUE, threads = TRUE)
+chelsa_tmx <- (chelsa_tmx/10)-273.15
+varnames(chelsa_tmx) <- "tasmax"
+longnames(chelsa_tmx) <- "max air temp"
+units(chelsa_tmx) <- units(downTrace_tmx)[1]
+time(chelsa_tmx) <- seq(as.Date("1950-01-16"), by = "month", l = 12)
+chelsa_tmx
+
+pattern <- "CHELSA_TraCE21k_[tasmin]+_([1-9]|1[0-2])_20_V1\\.0\\.tif"
+chelsa_tmn <- chelsa_fil[grepl(pattern, chelsa_fil)]
+chelsa_tmn
+
+chelsa_tmn <- rast(chelsa_tmn, win = ext(land))
+chelsa_tmn <- project(chelsa_tmn, downTrace_pr_corrected, method = "bilinear", 
+                        use_gdal = TRUE, threads = TRUE)
+chelsa_tmn <- (chelsa_tmn/10)-273.15
+varnames(chelsa_tmn) <- "tasmin"
+longnames(chelsa_tmn) <- "min air temp"
+units(chelsa_tmn) <- units(downTrace_tmx)[1]
+time(chelsa_tmn) <- seq(as.Date("1950-01-16"), by = "month", l = 12)
+chelsa_tmn
+
+zseq <- time(chelsa_pr)
+trace_pr_summary <- get_summary_stats(chelsa_pr, timevec = zseq, varname = "pr",
+                                  koppen = koppen)
+trace_pr_summary[, Model := "CHELSA-TraCE"]
+zseq <- time(chelsa_tmx)
+trace_tasmax_summary <- get_summary_stats(chelsa_tmx, timevec = zseq, varname = "tasmax",
+                                  koppen = koppen)
+trace_tasmax_summary[, Model := "CHELSA-TraCE"]
+zseq <- time(chelsa_tmn)
+trace_tasmin_summary <- get_summary_stats(chelsa_tmn, timevec = zseq, varname = "tasmin",
+                                  koppen = koppen)
+trace_tasmin_summary[, Model := "CHELSA-TraCE"]
+
+trace_summary <- rbindlist(list(trace_pr_summary, trace_tasmax_summary, trace_tasmin_summary))
+trace_summary
+```
+
+Now we can combine all the results into one data.table for plotting
+
+```{r combineArealValues}
+# combined data.table
+dt_summary <- rbindlist(list(downTrace_summary, #downTrace_raw_summary, 
+                             agcd_summary, chelsa_summary, trace_summary))
+dt_summary[, Year := as.integer(format(dt_summary[["time"]], "%Y"))]
+dt_summary
+
+# calculate annual averages
+dt_avg <- copy(dt_summary)[, .(mean = mean(mean), sd = mean(sd)), 
+                           by = c("Year", "variable", "Koppen", "Model")]
+
+# add 10-year rolling means
+dt_avg <- copy(dt_avg)[Model != "CHELSA-TraCE",
+                       `:=`(mean_roll = frollmean(mean, 10, align = "right"),
+                            sd_roll = frollmean(sd, 10, align = "right")),
+                       by = c("variable", "Koppen", "Model")]
+set(dt_avg, i = which(dt_avg[["Model"]] == "CHELSA-TraCE"),
+    j = "mean_roll", value = dt_avg[Model == "CHELSA-TraCE", ][["mean"]])
+set(dt_avg, i = which(dt_avg[["Model"]] == "CHELSA-TraCE"),
+    j = "sd_roll", value = dt_avg[Model == "CHELSA-TraCE", ][["sd"]])
+
+# need to add in extra rows for the CHELSA-TraCE data for plotting
+dt_avg <- rbindlist(list(
+  dt_avg,
+  copy(dt_avg)[Model == "CHELSA-TraCE", ][, Year := 1900L],
+  copy(dt_avg)[Model == "CHELSA-TraCE", ][, Year := 1989L]
+))
+dt_avg
+
+saveRDS(dt_avg, "/home/dafcluster4/Documents/GitHub/TraCESahul_Figs/koppen_validation_df.RDS")
+
+```
+
+## Plot the time series for each Koppen zone
+
+Now we can easily plot the time series for each Koppen zone. The uncorrected data is not shown here as the plot was too crowded with it.
+
+```{r plotKoppenTS, echo = FALSE}
+# region_mean <- dt_avg[Model != "downTrace", 
+#                       .(mean = round(mean(mean)*86400, 1), 
+#                         sd = round(mean(sd)*86400, 1)),
+#                       by = c("Model", "Koppen")][order(Koppen)]
+
+facet_labels <- function(variable) {
+  sapply(variable, function(v) {
+    if (v == "pr") {
+      "pr (mm/year)"
+    } else {
+      paste0(v, " (°C)")
+    }
+  })
+}
+
+ggplot(
+  dt_avg[!(Model %in% c("downTrace", "BoM", "CHELSA")) &
+           Koppen != "Equatorial", ],
+  aes(x = Year, y = mean_roll,
+      group = interaction(Koppen, Model),
+      color = Model, fill = Model)) +
+  ggh4x::facet_grid2(factor(variable, levels = c("pr", "tas", "tasmin", "tasmax")) ~ Koppen,
+                     scales = "free_y", independent = "y",
+                     labeller = labeller(.rows = facet_labels)) +
+  geom_line(aes(x = Year, y = mean_roll,
+                group = interaction(Koppen, Model),
+                colour = Model),
+            linewidth = 0.5, show.legend = FALSE) +
+  geom_ribbon(aes(ymin = mean_roll - sd_roll,
+                  ymax = mean_roll + sd_roll),
+              colour = NA,
+              alpha = 0.25) +
+  geom_line(linewidth = 0.5, show.legend = FALSE) +
+  scale_colour_manual(values = c("downTrace_corrected" = "#0c7BDC", "CHELSA-TraCE" = "#ffc20A")) +
+  scale_fill_manual(
+    values = c("downTrace_corrected" = "#0c7BDC", "CHELSA-TraCE" = "#ffc20A"),
+    labels = c("downTrace_corrected" = "TraCE-Sahul", "CHELSA-TraCE" = "CHELSA\nTraCE-21ka"),
+    guide = guide_legend(
+      title = "Model",
+      nrow = 1,
+      theme = theme(
+        legend.title.position = "top",
+        legend.title = element_text(hjust = 0.5),
+        legend.text.position = "bottom",
+        legend.key.height = unit(0.5, "cm"),
+        legend.key.width = unit(1, "cm")))) +
+  ggthemes::theme_clean() +
+  theme(axis.line = element_line(linewidth = 0.25, colour = "#000000"),
+        axis.line.x = element_line(linewidth = 0.25, colour = "#000000"),
+        axis.line.y = element_line(linewidth = 0.25, colour = "#000000"),
+        axis.ticks = element_line(linewidth = 0.25, colour = "#000000"),
+        axis.text = element_text(size = 10, colour = "#000000"),
+        axis.title = element_text(size = 10, colour = "#000000"),
+        # plot.caption = element_text(size = 6, colour = "#000000"),
+        plot.caption = element_blank(),
+        panel.border = element_blank(),
+        plot.background = element_blank(),
+        strip.background = element_rect(fill = NA, colour = NA),
+        strip.text.x = element_text(hjust = 0.5, colour = "black", size = 10),
+        legend.position = "bottom",
+        legend.background = element_blank(),
+        legend.frame = element_rect(colour = NA),
+        legend.title.position = "top",
+        legend.title = element_text(hjust = 0.5, colour = "black", size = 10, face = "plain"),
+        legend.text.position = "bottom",
+        legend.key.height = unit(0.5, "cm"),
+        legend.key.width = unit(1, "cm")) +
+  labs(x = "Year", y = "mean")
+```
+
+## Taylor diagrams and bias
+
+Now we can use the climatological averages to look at spatial and temporal correlations using Taylor diagrams and conditional quantile plots.
+
+This plot shows how the corrected downTrace data compares to the BoM data:
+
+```{r taylorDiags, echo = FALSE}
+obs <- rbindlist(
+  list(
+    # pr
+    melt(setDT(as.data.frame(tapp(agcd_pr, "month", mean), xy = TRUE)),
+         id.vars = c("x", "y"), value.name = "obs", variable.name = "Month")[, Var := "pr"],
+    melt(setDT(as.data.frame(tapp(agcd_tmx, "month", mean), xy = TRUE)),
+         id.vars = c("x", "y"), value.name = "obs", variable.name = "Month")[, Var := "tasmax"],
+    melt(setDT(as.data.frame(tapp(agcd_tmn, "month", mean), xy = TRUE)),
+         id.vars = c("x", "y"), value.name = "obs", variable.name = "Month")[, Var := "tasmin"]))
+corrected <- rbindlist(
+  list(
+    melt(setDT(as.data.frame(tapp(downTrace_pr_corrected, "month", mean), xy = TRUE)),
+         id.vars = c("x", "y"), value.name = "corrected", variable.name = "Month")[, Var := "pr"],
+    melt(setDT(as.data.frame(tapp(downTrace_tmx, "month", mean), xy = TRUE)),
+         id.vars = c("x", "y"), value.name = "corrected", variable.name = "Month")[, Var := "tasmax"],
+    melt(setDT(as.data.frame(tapp(downTrace_tmn, "month", mean), xy = TRUE)),
+         id.vars = c("x", "y"), value.name = "corrected", variable.name = "Month")[, Var := "tasmin"]
+  ))
+mod.dat <- merge(obs, corrected, all = FALSE)
+mod.dat[, Koppen := terra::extract(koppen, y = mod.dat[, c("x", "y")], method = "simple")[, 2]]
+mod.dat[, Month := factor(month.abb[as.integer(sapply(strsplit(x = as.character(mod.dat[["Month"]]), split =  "_"), "[", 2))],
+                          levels = month.abb)]
+
+saveRDS(mod.dat, "/home/dafcluster4/Documents/GitHub/TraCESahul_Figs/taylor_validation_df.RDS")
+
+TaylorDiagram(mod.dat,
+  obs = "obs",
+  mod = "corrected",
+  group = "Month",
+  type = "Var",
+  normalise = TRUE)
+```
+
+While this plot shows the improvement in the fit due to the bias correction. The arrows indicate where the uncorrected downTrace data would fit in the same space.
+
+```{r taylorDiags2, echo = FALSE}
+TaylorDiagram(mod.dat,
+  obs = "obs",
+  mod = c("corrected", "uncorrected"),
+  group = "Month",
+  normalise = TRUE)
+```
+
+And here are plots for the Koppen zones
+
+```{r TaylorKoppen, echo = FALSE}
+# TaylorDiagram(mod.dat[!is.na(Koppen) & Koppen != "Equatorial", ],
+#   obs = "obs",
+#   mod = "corrected",
+#   group = "Koppen",
+#   normalise = TRUE)
+
+TaylorDiagram(mod.dat[!is.na(Koppen) & Koppen != "Equatorial", ],
+  obs = "obs",
+  mod = "corrected",
+  group = c("Month", "Var"),
+  type = "Koppen",
+  normalise = TRUE)
+```
+
+
+Finally, a quick conditional quantile plot shows that the model under-predicts precipitation even after bias correction. This is a known artefact of the TraCE-21 model.
+
+A "perfect" model for each month is shown by the blue line. For most months we see that predictions tend to be increasingly negatively biased at high precipitation which is shown by departure of the median (red) line from the blue one. The widening uncertainty bands with increasing precipitation shows that bias corrected model predictions are worse for higher precipitation rates. Also, the red (median) line doesn't extend as far as the blue line which shows some predictions are much lower than the corresponding BoM measurements. 
+
+Note that the uncertainty bands do not extend as far as the median line because there is insufficient data to calculate them (ie. few high rainfall predictions).
+
+```{r conditonalEval, echo = FALSE}
+conditionalQuantile(mod.dat[!is.na(Koppen), ], bins = 50, obs = "obs", mod = "corrected", type = "Month")
+```
+
+## Model fit
+
+Now we can assess the effects of the bias correction by comparing a suite of model evaluation statistics between the `downTrace` and `downTrace_corrected` datasets against the `BoM` data.
+
+```{r modelFit}
+modStats(mod.dat[!is.na(Koppen), ],
+         obs = "obs", mod = "uncorrected", 
+         statistic = c("n", "IOA", "r", "RMSE"),
+         type = "Month")
+modStats(mod.dat[!is.na(Koppen), ],
+         obs = "obs", mod = "corrected", 
+         statistic = c("n", "IOA", "r", "RMSE"),
+         type = "Month")
+```
+
+And here are the same model fits for `month` within each `Koppen` zone
+
+```{r modelFitKoppenMonth}
+modStats(mod.dat[!is.na(Koppen), ],
+         obs = "obs", mod = "uncorrected", 
+         statistic = c("n", "IOA", "r", "RMSE"),
+         type = c("Month", "Koppen"))
+modStats(mod.dat[!is.na(Koppen), ],
+         obs = "obs", mod = "corrected", 
+         statistic = c("n", "IOA", "r", "RMSE"),
+         type = c("Month", "Koppen"))
+```
+
+```{r modFitKoppen}
+modStats(mod.dat[!is.na(Koppen), ],
+         obs = "obs", mod = "uncorrected", 
+         statistic = c("n", "IOA", "r", "RMSE"),
+         type = "Koppen")
+modStats(mod.dat[!is.na(Koppen), ],
+         obs = "obs", mod = "corrected", 
+         statistic = c("n", "IOA", "r", "RMSE"),
+         type = "Koppen")
+```
+
