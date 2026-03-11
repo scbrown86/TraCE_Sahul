@@ -2,7 +2,6 @@
 
 conda activate nco_stable
 
-
 # make template for Sahul
 cdo -f nc const,1,/home/dafcluster4/Documents/GitHub/TraCE_Sahul/02_data/grid_description_halfdeg.txt /home/dafcluster4/Documents/GitHub/TraCE_Sahul/02_data/trace_to_sahul_half_degree_bilin.nc
 
@@ -33,46 +32,50 @@ for folder in */; do
     echo "Processing $infile"
     # Create output filename
     oname="$(basename "$infile" .nc)"
-    outname="${output_dir}/${var}/${oname}.1500_1989CE.nc"
+    outname="${output_dir}/${var}/${oname}.1900_1989CE.nc"
     last_grid=$(cdo griddes "$infile" 2>/dev/null | grep "^# gridID" | tail -1 | awk '{print $3}')
     echo $last_grid
     # Run CDO processing based on variable
     # the inputs have already been remapped, cropped to Sahul, and adjusted as needed
     # just need to grab the appropriate timesteps and reset the calendar
-    if [[ "$var" == "T" || "$var" == "Z3" ]]; then
-        
-        cdo -w -s -L -setreftime,1500-01-16,,1month \
+    # files also need to be remapped bilinearly to the smoother resolution
+    if [[ "$var" == "T" || "$var" == "Z3" ]]; then        
+        cdo -w -s -L -seltimestep,4801/5880 \
+            -setreftime,1500-01-16,,1month \
             -settaxis,1500-01-16,,1month \
             -setcalendar,365_day \
-            -remapbic,$map_location \
+            -remapbil,$map_location \
             -selgrid,$last_grid \
             -seltimestep,258601/264480 \
             "$infile" "$outname"
     elif [[ "$var" == "RELHUM" || "$var" == "U" || "$var" == "V" ]]; then
         cdo -w -s -L --reduce_dim \
+            -seltimestep,4801/5880 \
             -setreftime,1500-01-16,,1month \
             -settaxis,1500-01-16,,1month \
             -setcalendar,365_day \
-            -remapbic,$map_location \
+            -remapbil,$map_location \
             -selgrid,$last_grid \
             -seltimestep,258601/264480 \
             "$infile" "$outname"
     elif [[ "$var" == "PRECC" || "$var" == "PRECL" ]]; then
         export CDO_REMAP_NORM="destarea"
         export REMAP_AREA_MIN=0.10
-        cdo -w -s -L -setreftime,1500-01-16,,1month \
+        cdo -w -s -L -seltimestep,4801/5880 \
+            -setreftime,1500-01-16,,1month \
             -settaxis,1500-01-16,,1month \
             -setcalendar,365_day \
-            -remapbic,$map_location \
+            -remapbil,$map_location \
             -seltimestep,258601/264480 \
             -selgrid,$last_grid \
             "$infile" "$outname"
         unset CDO_REMAP_NORM REMAP_AREA_MIN
     else
-        cdo -w -s -L -setreftime,1500-01-16,,1month \
+        cdo -w -s -L -seltimestep,4801/5880 \
+            -setreftime,1500-01-16,,1month \
             -settaxis,1500-01-16,,1month \
             -setcalendar,365_day \
-            -remapbic,$map_location \
+            -remapbil,$map_location \
             -seltimestep,258601/264480 \
             -selgrid,$last_grid \
             "$infile" "$outname"

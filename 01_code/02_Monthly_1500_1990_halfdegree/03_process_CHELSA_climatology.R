@@ -154,14 +154,14 @@ panel(coarse_chelsa_clim$tasmax, range = c(5, 30), fill_range = TRUE,
 
 #### TRACE ####
 # load in the 0.5° TraCE data for 1980:1989
-trace <- list(rast("/media/dafcluster4/storage/TraCE_Monthly_halfDeg/PRECC/trace.01-36.22000BP-1990CE.cam2.h0.PRECC.0000101-2204012.Sahul.concat.1500_1989CE.nc",
-                   lyrs = 5761:5880) + 
-              rast("/media/dafcluster4/storage/TraCE_Monthly_halfDeg/PRECL/trace.01-36.22000BP-1990CE.cam2.h0.PRECL.0000101-2204012.Sahul.concat.1500_1989CE.nc",
-                   lyrs = 5761:5880),     #1980 - 1989
-              rast("/media/dafcluster4/storage/TraCE_Monthly_halfDeg/TSMX/trace.01-36.22000BP-1990CE.cam2.h0.TSMX.0000101-2204012.Sahul.concat.1500_1989CE.nc",
-                   lyrs = 5761:5880)-273.15,
-              rast("/media/dafcluster4/storage/TraCE_Monthly_halfDeg/TSMN/trace.01-36.22000BP-1990CE.cam2.h0.TSMN.0000101-2204012.Sahul.concat.1500_1989CE.nc",
-                   lyrs = 5761:5880)-273.15)
+trace <- list(rast("/media/dafcluster4/storage/TraCE_Monthly_halfDeg/PRECC/trace.01-36.22000BP-1990CE.cam2.h0.PRECC.0000101-2204012.Sahul.concat.1900_1989CE.nc",
+                   lyrs = 961:1080) + 
+              rast("/media/dafcluster4/storage/TraCE_Monthly_halfDeg/PRECL/trace.01-36.22000BP-1990CE.cam2.h0.PRECL.0000101-2204012.Sahul.concat.1900_1989CE.nc",
+                   lyrs = 961:1080),     #1980 - 1989
+              rast("/media/dafcluster4/storage/TraCE_Monthly_halfDeg/TSMX/trace.01-36.22000BP-1990CE.cam2.h0.TSMX.0000101-2204012.Sahul.concat.1900_1989CE.nc",
+                   lyrs = 961:1080)-273.15,
+              rast("/media/dafcluster4/storage/TraCE_Monthly_halfDeg/TSMN/trace.01-36.22000BP-1990CE.cam2.h0.TSMN.0000101-2204012.Sahul.concat.1900_1989CE.nc",
+                   lyrs = 961:1080)-273.15)
 trace
 # make climatological monthly averages from 1980-1989
 trace <- pblapply(trace, function(i) {
@@ -183,37 +183,37 @@ names(trace) <- c("pr", "tasmax", "tasmin")
 trace$pr <- ifel(trace$pr < 0, 0, trace$pr)
 minmax(trace$tasmax - trace$tasmin) # dtr issues
 
-trace_climatologies <- c(
-  "02_data/02_processed/TRACE_half/TraCE_coarse_pr_climatology.nc",
- "02_data/02_processed/TRACE_half/TraCE_coarse_tasmax_climatology.nc",
-  "02_data/02_processed/TRACE_half/TraCE_coarse_tasmin_climatology.nc")
+# trace_climatologies <- c(
+#   "02_data/02_processed/TRACE_half/TraCE_coarse_pr_climatology.nc",
+#  "02_data/02_processed/TRACE_half/TraCE_coarse_tasmax_climatology.nc",
+#   "02_data/02_processed/TRACE_half/TraCE_coarse_tasmin_climatology.nc")
 
-if (!all(file.exists(trace_climatologies))) {
-  # convert TraCE climatology to 0.05 degrees
-  if (!dir.exists("02_data/02_processed/TRACE_half")) {
-    dir.create("02_data/02_processed/TRACE_half", recursive = TRUE)
-  }
-  # to make sure the extents are exactly the same, reprocess our
-  # downscaled data with bsplines
-  # multilevel b-spline to 0.05°
-  coarse_trace_clim <- lapply(trace, interpolate_bspline,
-                              output_dir = "02_data/02_processed/TRACE_half",
-                              bspline_ext = ext(template),
-                              target_size = res(template)[1],
-                              parallel_cores = 12,
-                              start_date = as.Date("1985-01-16"),
-                              outname_template = "TraCE_coarse_%s_climatology.nc",
-                              algo = "bspline", ## <
-                              load_exist = TRUE)
-  names(coarse_trace_clim) <- c("pr", "tasmax", "tasmin")
-  coarse_trace_clim
-} else {
-  coarse_trace_clim <- lapply(brown_climatologies, rast)
-  names(coarse_trace_clim) <- c("pr", "tasmax", "tasmin")
-}
-coarse_trace_clim$pr <- coarse_trace_clim$pr * 1
-coarse_trace_clim$tasmax <- coarse_trace_clim$tasmax * 1
-coarse_trace_clim$tasmin <- coarse_trace_clim$tasmin * 1
+# if (!all(file.exists(trace_climatologies))) {
+#   # convert TraCE climatology to 0.05 degrees
+#   if (!dir.exists("02_data/02_processed/TRACE_half")) {
+#     dir.create("02_data/02_processed/TRACE_half", recursive = TRUE)
+#   }
+#   # to make sure the extents are exactly the same, reprocess our
+#   # downscaled data with bsplines
+#   # multilevel b-spline to 0.05°
+#   coarse_trace_clim <- lapply(trace, interpolate_bspline,
+#                               output_dir = "02_data/02_processed/TRACE_half",
+#                               bspline_ext = ext(template),
+#                               target_size = res(template)[1],
+#                               parallel_cores = 12,
+#                               start_date = as.Date("1985-01-16"),
+#                               outname_template = "TraCE_coarse_%s_climatology.nc",
+#                               algo = "bspline", ## <
+#                               load_exist = TRUE)
+#   names(coarse_trace_clim) <- c("pr", "tasmax", "tasmin")
+#   coarse_trace_clim
+# } else {
+#   coarse_trace_clim <- lapply(brown_climatologies, rast)
+#   names(coarse_trace_clim) <- c("pr", "tasmax", "tasmin")
+# }
+coarse_trace_clim$pr <- ifel(trace$pr < 0, 0, trace$pr) * 1
+coarse_trace_clim$tasmax <- trace$tasmax * 1
+coarse_trace_clim$tasmin <- trace$tasmin * 1
 coarse_trace_clim
 
 panel(0.5 * (coarse_trace_clim$tasmax + coarse_trace_clim$tasmin), # avg temps
@@ -232,6 +232,10 @@ plot(coarse_trace_clim$tasmax - coarse_trace_clim$tasmin, # DTR
 rbind(
   minmax(coarse_chelsa_clim$pr * 86400),
   minmax(coarse_trace_clim$pr * 86400))
+
+coarse_chelsa_clim <- lapply(coarse_chelsa_clim, function(x) {
+  project(x, coarse_trace_clim$pr, "bilinear")
+})
 
 # simple delta correction for precip.
 # ? log ratio

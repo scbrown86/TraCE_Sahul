@@ -9,14 +9,26 @@ plot(land)
 template <- rast("02_data/trace_to_sahul_half_degree_bilin.nc")
 template
 
-# Keep bathy
-elev <- rast("/media/dafcluster4/storage/Ice5g/ice5g_v1.2_00.0k_10min.nc", "orog")
-elev <- crop(rotate(elev), ext(template), snap = "out")
-elev
-plot(elev, fun = function() lines(land))
+# Timesteps from Karget et al
+time_steps <- data.table("timeID" = seq(20, -200, by = -1),
+                         "startyear" = seq(1900, -20100, by = -100),
+                         "endyear" = c(1990, seq(1899, -20001, l = 220)),
+                         "k BP" = seq(0, by = 0.1, l = 221))
+time_steps
 
-elev_coarse <- project(elev, template, "average")
+# read in elev for 1500 C.E (held constant after this)
+elev <- rast(lapply(gtools::mixedsort(list.files("/mnt/Data/CHELSA_Trace21/Input/",
+                                            pattern = "dem_-?\\d+_V1\\.0\\.tif$",
+                                            full.names = TRUE),
+                                 decreasing = TRUE)[which(time_steps[["startyear"]] == 1500)],
+               function(i) rast(i, win = ext(template), snap = "out")))
+time(elev) <- time_steps[startyear == 1500, ][["k BP"]]*1000
+elev
+
+# resample to 0.5°
+elev_coarse <- resample(elev, template, "mean", threads = TRUE)
 elev_coarse
+
 # elev_coarse <- setValues(elev_coarse, round(values(elev_coarse), 1))
 plot(elev_coarse,
      breaks = c(-Inf, 0, Inf),
