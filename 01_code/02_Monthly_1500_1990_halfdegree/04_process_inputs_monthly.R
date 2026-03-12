@@ -231,15 +231,19 @@ panel((ta_low[[1:6]] - ta_high[[1:6]]) / (zg_high[[1:6]] - zg_low[[1:6]]),
      fun = function() lines(land), range = c(0, 0.008), fill_range = TRUE)
 
 # Create oro
-oro <- rast("02_data/01_inputs/TraCE21_elevation_1450CE_1950CE_halfDeg.nc") * 1
+oro <- rast("02_data/01_inputs/TraCE21_elevation_22kaBP_1500CE_withBathy.tif")
+oro <- oro[[nlyr(oro)]] # data from 1500
 oro
 
-col_pal <- c("#08306B","#08519C","#2171B5","#4292C6","#6BAED6","#9ECAE1","#006400",
-             "#228B22","#ADDEAD","#F4EBC1","#D9A066")
-plot(oro,
-     col = col_pal,
-     breaks = c(-9000, -4000, -2000, -1000, -500, -100, 0, 100, 500, 1500,
-                2000, 4000),
+
+col_pal <- c(
+  "#08306B", "#2171B5", "#4292C6", "#6BAED6", "#9ECAE1",
+  "#006400", "#228B22", "#56A83A", "#8CC56A", "#ADDE9E",
+  "#F4EBC1", "#E8D5A3", "#D9A066", "#C47A3A", "#A0522D")
+plot(oro, col = col_pal,
+     type = "interval",
+     breaks = c(-9000, -2000, -1000, -500, -100, -1, 0,
+                10, 25, 50, 100, 200, 500, 1000, 1500, 3000),
      fun = function() lines(land, col = "#000000", lwd = 1.5))
 time(oro) <- as.Date("1950-06-16")
 units(oro) <- "m"
@@ -258,39 +262,53 @@ land <- vect(rnaturalearthhires::countries10)
 in_oro <- list.files("/mnt/Data/CHELSA_Trace21/Input",
                      full.names = TRUE, pattern = ".tif")
 # match to timesteps for 1600 onwards (https://chelsa-climate.org/chelsa-trace21k/)
-pattern <- "CHELSA_TraCE21k_dem_(16|17|18|19|20)_V1\\.0\\.tif$"
+pattern <- "CHELSA_TraCE21k_dem_(20)_V1\\.0\\.tif$"
 in_oro <- grep(pattern, in_oro, value = TRUE)
-oro_high <- rast(lapply(in_oro, function(x) rast(x, win = ext(template))))
+oro_high <- rast(in_oro, win = ext(template))
 oro_high
 
-oro_high_check <- oro_high
-oro_high_check <- ifel(!is.na(oro_high_check), 1, 0)
-oro_high_check <- app(oro_high_check, sum, na.rm = TRUE)
-oro_high_check
-length(unique(values(oro_high_check))) == 2 # all are 0/5
-plot(oro_high_check) # 0/5 == no change in land/sea mask
-oro_high <- oro_high[[5]]
-plot(oro_high,
-     col = col_pal,
-     breaks = c(-6000, -4000, -2000, -1000, -500, -100, 0, 100, 500,
-                1500, 2000, 4000),
+plot(oro_high, col = col_pal,
+     type = "interval",
+     breaks = c(-9000, -2000, -1000, -500, -100, -1, 0,
+                10, 25, 50, 100, 200, 500, 1000, 1500, 3000),
+     fun = function() lines(land, col = "#000000", lwd = 1.5))
+
+# GEBCO 2014
+bathy <- rast("~/Documents/GEBCO_2014_2D_Sahul.nc", win = ext(template)) # single layer, contemporary
+bathy
+
+plot(bathy, col = col_pal,
+     type = "interval",
+     breaks = c(-9000, -2000, -1000, -500, -100, -1, 0,
+                10, 25, 50, 100, 200, 500, 1000, 1500, 3000),
+     fun = function() lines(land, col = "#000000", lwd = 1.5))
+
+# blend
+blended <- ifel(bathy < 0, bathy, oro_high)
+blended
+minmax(blended)
+plot(blended, col = col_pal,
+     type = "interval",
+     breaks = c(-9000, -2000, -1000, -500, -100, -1, 0,
+                10, 25, 50, 100, 200, 500, 1000, 1500, 3000),
      fun = function() lines(land, col = "#000000", lwd = 1.5))
 
 # mean aggregation to ~5km grid
 tmp_rst <- rast(
-  res = 0.05, extent = ext(oro),
+  res = 0.05, extent = ext(template),
   crs = "EPSG:4326")
 tmp_rst
-oro_5 <- project(oro_high[[1]], tmp_rst,
-                 method = "average",
-                 use_gdal = TRUE)
-oro_5 <- mask(oro_5, land, touches = TRUE)
+oro_5 <- project(blended, tmp_rst,
+                 method = "average", use_gdal = TRUE)
+
 plot(oro_5,
      col = col_pal,
-     breaks = c(-6000, -4000, -2000, -1000, -500, -100, 0, 100, 500,
-                1500, 2000, 4000),
+     type = "interval",
+     breaks = c(-9000, -2000, -1000, -500, -100, -1, 0,
+                10, 25, 50, 100, 200, 500, 1000, 1500, 3000),
      fun = function() lines(land, col = "#000000", lwd = 1.5))
-oro_5 <- setValues(oro_5, round(values(oro_5), 3))
+
+oro_5 <- setValues(oro_5, round(values(oro_5), 0)) # round to nearest metre
 units(oro_5) <- "m"
 varnames(oro_5) <- "Orographic elevation"
 crs(oro_5) <- "EPSG:4326"
@@ -316,16 +334,15 @@ template_raster
 plot(template_raster, fun = function() lines(project(land, template_raster)))
 merc_template <- project(oro_5,
                          template_raster,
-                         # threads = 12,
                          use_gdal = TRUE,
                          method = "average")
 merc_template
 plot(merc_template,
      col = col_pal,
-     breaks = c(-6000, -4000, -2000, -1000, -500, -100, 0, 100, 500,
-                1500, 2000, 4000),
-     fun = function() lines(project(land, merc_template),
-                            col = "#000000", lwd = 1.5))
+     type = "interval",
+     breaks = c(-9000, -2000, -1000, -500, -100, -1, 0,
+                10, 25, 50, 100, 200, 500, 1000, 1500, 3000),
+     fun = function() lines(land, col = "#000000", lwd = 1.5))
 writeCDF(merc_template,
          "02_data/02_processed/merc_template.nc",
          varname = "elevation", longname = "Orographic elevation",
