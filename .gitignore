@@ -77,3 +77,7 @@ delta_remapped_tmp.nc
 03_comparisons/scratch/*.nc
 python_test/qdm_trained_pr_Sahul.nc
 scratch/*
+fine_scale_interp.nc
+fine_scale_subset.nc
+02_data/01_inputs/TraCE21_fine_elevation_22kaBP_1500CE_withBathy_inttime.nc
+02_data/01_inputs/TraCE21_fine_elevation_22kaBP_1500CE_withBathy.nc
