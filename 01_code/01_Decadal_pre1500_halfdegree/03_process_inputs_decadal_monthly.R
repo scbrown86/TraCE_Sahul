@@ -12,7 +12,7 @@ land
 template <- rast("02_data/trace_to_sahul_half_degree_bilin.nc")
 template
 
-setwd("/mnt/Data/TraCE21_SahulHalfDeg/")
+base_dir <- "/mnt/Data/TraCE21_SahulHalfDeg/"
 
 # load in the deltas
 deltas <- list(
@@ -63,7 +63,7 @@ sapply(deltas, panel)
 # Proj4 string = '+proj=merc +lon_0=0 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs'
 
 # timesteps
-n <- nlyr(rast("PRECC/trace.01-35.22000BP-1500CE.cam2.h0.PRECC.0000101-258600.Sahul.decavg.concat.nc"))
+n <- nlyr(rast(file.path(base_dir, "PRECC/trace.01-35.22000BP-1500CE.cam2.h0.PRECC.0000101-258600.Sahul.decavg.concat.nc")))
 n_decades <- n / 12  # 2155
 steps <- seq(1, by = 120, length.out = n_decades)
 ends <- steps + 119
@@ -78,34 +78,32 @@ time_steps <- data.table(
   YearsBP = rep(ceiling(time_bp), each = 12))
 time_steps[, YearsCE := rcarbon::BPtoBCAD(YearsBP)]
 time_steps[, dec_year := YearsCE + (Months - 1 + 15.5 / 30.4375) / 12]
+time_steps[YearsCE <= 1450, ]
 time_steps
 
-# subset for layers for testing
-idx <- time_steps[YearsBP >= 21975, ][["layer"]]
-
 # create relative humidity data
-huss <- rast("RELHUM/trace.01-35.22000BP-1500CE.cam2.h0.RELHUM.0000101-258600.Sahul.decavg.concat.nc",
-             "RELHUM", lyrs = idx)
-time(huss) <- time_steps[idx, ][["dec_year"]]
+huss <- rast(file.path(base_dir, "RELHUM/trace.01-35.22000BP-1500CE.cam2.h0.RELHUM.0000101-258600.Sahul.decavg.concat.nc"),
+             "RELHUM")
+time(huss) <- time_steps[["dec_year"]]
 units(huss) <- "percent"
 varnames(huss) <- "RELHUM (Relative humidity)"
-names(huss) <- as.character(paste(time_steps[idx, ][["YearsBP"]], time_steps[idx, ][["Months"]],
+names(huss) <- as.character(paste(time_steps[["YearsBP"]], time_steps[["Months"]],
                                   sep = "."))
 crs(huss) <- "EPSG:4326"
 huss
+setMinMax(huss)
 range(minmax(huss))
-# plot(huss[[1:6]])
-writeCDF(huss, "/home/dafcluster4/Desktop/CHELSA_LGM/huss.nc", #"02_data/02_processed/huss.nc",
+writeCDF(huss, "/media/dafcluster4/storage/TraCE_Decadal_halfDeg/huss.nc",
          varname = "relhum",
          longname = "RELHUM (Relative humidity)",
          overwrite = TRUE,
          unit = "percent", zname = "time", prec = "float")
 
 # create precipitation data
-pr <- rast("PRECC/trace.01-35.22000BP-1500CE.cam2.h0.PRECC.0000101-258600.Sahul.decavg.concat.nc",
-           "PRECC", lyrs = idx) +
-  rast("PRECL/trace.01-35.22000BP-1500CE.cam2.h0.PRECL.0000101-258600.Sahul.decavg.concat.nc",
-       "PRECL", lyrs = idx)
+pr <- rast(file.path(base_dir, "PRECC/trace.01-35.22000BP-1500CE.cam2.h0.PRECC.0000101-258600.Sahul.decavg.concat.nc"),
+           "PRECC") +
+  rast(file.path(base_dir, "PRECL/trace.01-35.22000BP-1500CE.cam2.h0.PRECL.0000101-258600.Sahul.decavg.concat.nc"),
+       "PRECL")
 time(pr) <- time(huss)
 units(pr) <- "kg/m2/s"
 varnames(pr) <- "rainfall"
@@ -113,22 +111,22 @@ names(pr) <- names(huss)
 crs(pr) <- "EPSG:4326"
 pr
 pr <- pr * deltas$pr # bias correct
-pr
-panel(pr[[floor(seq(1, 36, l = 6))]]*86400, range = c(0, 12), fill_range = TRUE)
-pr <- ifel(pr < 0, 0, pr)
-writeCDF(pr, "/home/dafcluster4/Desktop/CHELSA_LGM/pr.nc",#"02_data/02_processed/pr.nc",
+range(minmax(pr))*86400
+precip_min <- 0.1 / 86400  # 0.1 mm/day in kg m-2 s-1
+pr <- ifel(pr < precip_min, precip_min, pr)
+panel(pr[[floor(seq(1, nlyr(pr), l = 6))]]*86400, range = c(0, 12), fill_range = TRUE)
+writeCDF(pr, "/media/dafcluster4/storage/TraCE_Decadal_halfDeg/pr.nc",
          varname = "pr", longname = "precipitation",
          overwrite = TRUE,
          unit = "kg/m2/s", zname = "time", prec = "float")
 
 # create ta_high
-ta_high <- rast("T/trace.01-35.22000BP-1500CE.cam2.h0.T.0000101-258600.Sahul.decavg.concat.nc",
+ta_high <- rast(file.path(base_dir, "T/trace.01-35.22000BP-1500CE.cam2.h0.T.0000101-258600.Sahul.decavg.concat.nc"),
                 "T")
 ## need TA @ [z=20]
 ta_ind <- round(as.numeric(sapply(strsplit(names(ta_high), "=|_"), "[", 3)))
 ta_ind <- which(ta_ind == 601)
 ta_high <- ta_high[[ta_ind]]
-ta_high <- ta_high[[idx]]
 ta_high
 time(ta_high) <- time(huss)
 units(ta_high) <- "K"
@@ -139,18 +137,17 @@ depth(ta_high) <- NULL
 ta_high
 # plot(ta_high[[1]], fun = function() lines(land, col = "#FFFFFF"))
 # plot(ta_high[[1]]-273.15)
-writeCDF(ta_high, "/home/dafcluster4/Desktop/CHELSA_LGM/ta_high.nc", #02_data/02_processed/ta_high.nc", varname = "T",
+writeCDF(ta_high, "/media/dafcluster4/storage/TraCE_Decadal_halfDeg/ta_high.nc", #02_data/02_processed/ta_high.nc", varname = "T",
          longname = "T (TA_High)", overwrite = TRUE, unit = "K",
          zname = "time", prec = "float")
 
 # create ta_low
-ta_low <- rast("T/trace.01-35.22000BP-1500CE.cam2.h0.T.0000101-258600.Sahul.decavg.concat.nc",
+ta_low <- rast(file.path(base_dir, "T/trace.01-35.22000BP-1500CE.cam2.h0.T.0000101-258600.Sahul.decavg.concat.nc"),
                "T")
 ## need TA @ z=26
 ta_ind <- round(as.numeric(sapply(strsplit(names(ta_low), "=|_"), "[", 3)))
 ta_ind <- which(ta_ind == 993)
 ta_low <- ta_low[[ta_ind]]
-ta_low <- ta_low[[idx]]
 time(ta_low) <- time(huss)
 units(ta_low) <- "K"
 varnames(ta_low) <- "Temperature"
@@ -162,31 +159,42 @@ ta_low
 # should all be positive
 plot(ta_low[[1]] - ta_high[[1]], fun = function() lines(land, col = "#FFFFFF"))
 
-writeCDF(ta_low, "/home/dafcluster4/Desktop/CHELSA_LGM/ta_low.nc", #02_data/02_processed/ta_low.nc",
+writeCDF(ta_low, "/media/dafcluster4/storage/TraCE_Decadal_halfDeg/ta_low.nc",
          varname = "T", longname = "T (TA_low)",
          overwrite = TRUE,
          unit = "K", zname = "time", prec = "float")
 
 # create tas
-# create tas
-tsmx <- rast("TSMX/trace.01-35.22000BP-1500CE.cam2.h0.TSMX.0000101-258600.Sahul.decavg.concat.nc", "TSMX",
-             lyrs = idx)
-tsmn <- rast("TSMN/trace.01-35.22000BP-1500CE.cam2.h0.TSMN.0000101-258600.Sahul.decavg.concat.nc", "TSMN",
-             lyrs = idx)
+tsmx <- rast(file.path(base_dir, "TSMX/trace.01-35.22000BP-1500CE.cam2.h0.TSMX.0000101-258600.Sahul.decavg.concat.nc"),
+             "TSMX")
+tsmn <- rast(file.path(base_dir, "TSMN/trace.01-35.22000BP-1500CE.cam2.h0.TSMN.0000101-258600.Sahul.decavg.concat.nc"),
+             "TSMN")
+# corrected tas
 tas <- (0.5 * (tsmx + tsmn)) + deltas$tas
+
+# corrected dtr
 dtr <- (tsmx - tsmn) * deltas$dtr
 time(tas) <- time(dtr) <- time(huss)
 tas
 dtr
+sum(dtr < 0) # check dtr values
+# class       : SpatRaster
+# size        : 113, 113, 1  (nrow, ncol, nlyr)
+# resolution  : 0.5, 0.5  (x, y)
+# extent      : 105, 161.5, -45, 11.5  (xmin, xmax, ymin, ymax)
+# coord. ref. : lon/lat WGS 84
+# source(s)   : memory
+# name        : sum
+# min value   :   0
+# max value   :   0
 
-# tas
 units(tas) <- "K"
 varnames(tas) <- "Temperature"
 longnames(tas) <- "mean temperature at surface"
 names(tas) <- names(huss)
 crs(tas) <- "EPSG:4326"
 tas
-writeCDF(tas, "/home/dafcluster4/Desktop/CHELSA_LGM/tas.nc", #"02_data/02_processed/tas.nc",
+writeCDF(tas, "/media/dafcluster4/storage/TraCE_Decadal_halfDeg/tas.nc",
          varname = "tas",
          longname = "Mean Temperature", overwrite = TRUE, unit = "K",
          zname = "time", prec = "float")
@@ -212,18 +220,28 @@ tasmin
 
 # check for neg dtr and write
 sum(tasmax < tasmin)
-writeCDF(tasmax, "/home/dafcluster4/Desktop/CHELSA_LGM/tasmax.nc", #"02_data/02_processed/tasmax.nc",
+# class       : SpatRaster
+# size        : 113, 113, 1  (nrow, ncol, nlyr)
+# resolution  : 0.5, 0.5  (x, y)
+# extent      : 105, 161.5, -45, 11.5  (xmin, xmax, ymin, ymax)
+# coord. ref. : lon/lat WGS 84 (EPSG:4326)
+# source(s)   : memory
+# name        : sum
+# min value   :   0
+# max value   :   0
+
+writeCDF(tasmax, "/media/dafcluster4/storage/TraCE_Decadal_halfDeg/tasmax.nc",
          varname = "tasmax",
          longname = "Maximum Temperature", overwrite = TRUE, unit = "K",
          zname = "time", prec = "float")
-writeCDF(tasmin, "/home/dafcluster4/Desktop/CHELSA_LGM/tasmin.nc",#"02_data/02_processed/tasmin.nc",
+writeCDF(tasmin, "/media/dafcluster4/storage/TraCE_Decadal_halfDeg/tasmin.nc",
          varname = "tasmin",
          longname = "Minimum Temperature", overwrite = TRUE, unit = "K",
          zname = "time", prec = "float")
 
 # create uwind
-uwind <- rast("U/trace.01-35.22000BP-1500CE.cam2.h0.U.0000101-258600.Sahul.decavg.concat.nc",
-              "U", lyrs = idx)
+uwind <- rast(file.path(base_dir, "U/trace.01-35.22000BP-1500CE.cam2.h0.U.0000101-258600.Sahul.decavg.concat.nc"),
+              "U")
 time(uwind) <- time(huss)
 units(uwind) <- "m/s"
 varnames(uwind) <- "Zonal wind"
@@ -231,14 +249,14 @@ names(uwind) <- names(huss)
 depth(uwind) <- NULL
 crs(uwind) <- "EPSG:4326"
 uwind
-writeCDF(uwind, "/home/dafcluster4/Desktop/CHELSA_LGM/uwind.nc", #"02_data/02_processed/uwind.nc",
+writeCDF(uwind, "/media/dafcluster4/storage/TraCE_Decadal_halfDeg/uwind.nc",
          varname = "U",
          longname = "Zonal wind", overwrite = TRUE, unit = "m/s",
          zname = "time", prec = "float")
 
 # create vwind
-vwind <- rast("V/trace.01-35.22000BP-1500CE.cam2.h0.V.0000101-258600.Sahul.decavg.concat.nc",
-              "V", lyrs = idx)
+vwind <- rast(file.path(base_dir, "V/trace.01-35.22000BP-1500CE.cam2.h0.V.0000101-258600.Sahul.decavg.concat.nc"),
+              "V")
 time(vwind) <- time(huss)
 units(vwind) <- "m/s"
 varnames(vwind) <- "Meridional wind"
@@ -246,20 +264,18 @@ names(vwind) <- names(huss)
 depth(vwind) <- NULL
 crs(vwind) <- "EPSG:4326"
 vwind
-writeCDF(vwind, "/home/dafcluster4/Desktop/CHELSA_LGM/vwind.nc",
-         #"02_data/02_processed/vwind.nc",
+writeCDF(vwind, "/media/dafcluster4/storage/TraCE_Decadal_halfDeg/vwind.nc",
          varname = "V",
          longname = "Meridional wind", overwrite = TRUE, unit = "m/s",
          zname = "time", prec = "float")
 
 # create zg_high
-zg_high <- rast("Z3/trace.01-35.22000BP-1500CE.cam2.h0.Z3.0000101-258600.Sahul.decavg.concat.nc",
+zg_high <- rast(file.path(base_dir, "Z3/trace.01-35.22000BP-1500CE.cam2.h0.Z3.0000101-258600.Sahul.decavg.concat.nc"),
                 "Z3")
 ## need zg @ [z=20]
 zg_high_ind <- round(as.numeric(sapply(strsplit(names(zg_high), "=|_"), "[", 3)))
 zg_high_ind <- which(zg_high_ind == 601)
 zg_high <- zg_high[[zg_high_ind]]
-zg_high <- zg_high[[idx]]
 time(zg_high) <- time(huss)
 units(zg_high) <- "m"
 varnames(zg_high) <- "Geopotential Height (above sea level)"
@@ -267,19 +283,18 @@ names(zg_high) <- names(huss)
 crs(zg_high) <- "EPSG:4326"
 depth(zg_high) <- NULL
 zg_high
-writeCDF(zg_high, "/home/dafcluster4/Desktop/CHELSA_LGM/zg_high.nc", #"02_data/02_processed/zg_high.nc",
+writeCDF(zg_high, "/media/dafcluster4/storage/TraCE_Decadal_halfDeg/zg_high.nc",
          varname = "z3",
          longname = "Geopotential Height", overwrite = TRUE, unit = "m",
          zname = "time", prec = "float")
 
 # create zg_low
-zg_low <- rast("Z3/trace.01-35.22000BP-1500CE.cam2.h0.Z3.0000101-258600.Sahul.decavg.concat.nc",
+zg_low <- rast(file.path(base_dir, "Z3/trace.01-35.22000BP-1500CE.cam2.h0.Z3.0000101-258600.Sahul.decavg.concat.nc"),
                "Z3")
 ## need zg @z=26
 zg_low_ind <- round(as.numeric(sapply(strsplit(names(zg_low), "=|_"), "[", 3)))
 zg_low_ind <- which(zg_low_ind == 993)
 zg_low <- zg_low[[zg_low_ind]]
-zg_low <- zg_low[[idx]]
 time(zg_low) <- time(huss)
 units(zg_low) <- "m"
 varnames(zg_low) <- "Geopotential Height (above sea level)"
@@ -287,7 +302,7 @@ names(zg_low) <- names(huss)
 crs(zg_low) <- "EPSG:4326"
 depth(zg_low) <- NULL
 zg_low
-writeCDF(zg_low, "/home/dafcluster4/Desktop/CHELSA_LGM/zg_low.nc",#"02_data/02_processed/zg_low.nc",
+writeCDF(zg_low, "/media/dafcluster4/storage/TraCE_Decadal_halfDeg/zg_low.nc",
          varname = "z3",
          longname = "Geopotential Height", overwrite = TRUE, unit = "m",
          zname = "time", prec = "float")
@@ -299,101 +314,75 @@ panel((ta_low[[1:6]] - ta_high[[1:6]]) / (zg_high[[1:6]] - zg_low[[1:6]]),
      fun = function() lines(land), range = c(0, 0.006), fill_range = TRUE)
 
 # Create oro
-oro <- rast("/home/dafcluster4/Documents/GitHub/TraCE_Sahul/02_data/01_inputs/TraCE21_elevation_22kaBP_1500CE_withBathy.tif")
-oro <- oro[[1]] # data for LGM
+oro <- rast("02_data/01_inputs/TraCE21_elevation_22kaBP_1500CE_withBathy.tif")
+oro <- oro[[-nlyr(oro)]] # remove 1500 onwards
+nlyr(oro) == length(unique(time_steps[["dec"]]))
+time(oro) <- unique(time_steps[["dec"]])
 oro
 
 col_pal <- c(
   "#08306B", "#2171B5", "#4292C6", "#6BAED6", "#9ECAE1",
   "#006400", "#228B22", "#56A83A", "#8CC56A", "#ADDE9E",
   "#F4EBC1", "#E8D5A3", "#D9A066", "#C47A3A", "#A0522D")
-plot(oro, col = col_pal,
-     type = "interval",
-     breaks = c(-9000, -2000, -1000, -500, -100, -1, 0,
+panel(oro[[floor(seq(1, nlyr(oro), l = 6))]],
+      col = col_pal,
+      type = "interval",
+      breaks = c(-9000, -2000, -1000, -500, -100, -1, 0,
                 10, 25, 50, 100, 200, 500, 1000, 1500, 3000),
-     fun = function() lines(land, col = "#000000", lwd = 1.5))
+      fun = function() lines(land, col = "#000000", lwd = 1.5))
 oro <- ifel(oro < 0, 0, oro)
-time(oro) <- as.integer(format(time(oro), "%Y"))
 units(oro) <- "m"
 varnames(oro) <- "Orographic elevation"
-names(oro) <- paste0(time(oro), "BP")
 crs(oro) <- "EPSG:4326"
 oro
-writeCDF(oro, "/home/dafcluster4/Desktop/CHELSA_LGM/oro.nc", #02_data/02_processed/oro.nc",
+panel(oro[[floor(seq(1, nlyr(oro), l = 6))]],
+      col = col_pal,
+      type = "interval",
+      breaks = c(-9000, -2000, -1000, -500, -100, -1, 0,
+                 10, 25, 50, 100, 200, 500, 1000, 1500, 3000),
+      fun = function() lines(land, col = "#000000", lwd = 1.5))
+
+writeCDF(oro, "/media/dafcluster4/storage/TraCE_Decadal_halfDeg/oro.nc",
          varname = "elevation",
+         compression = 3,
+         chunksizes = c(114, 113, 1),
          longname = "Orographic elevation", overwrite = TRUE, unit = "m",
-         zname = "time", prec = "float")
+         shuffle = TRUE,
+         zname = "time", prec = "integer")
 
 # Create oro_high
-land <- vect(rnaturalearthhires::countries10)
-
-# oro_high <- rast("raw/Sahul_contemporary_elev.nc")
-in_oro <- list.files("/mnt/Data/CHELSA_Trace21/Input",
-                     full.names = TRUE, pattern = ".tif")
-# match to timesteps for 21k BP
-pattern <- "CHELSA_TraCE21k_dem_(-200)_V1\\.0\\.tif$"
-in_oro <- grep(pattern, in_oro, value = TRUE)
-oro_high <- rast(in_oro, win = ext(template))
+oro_high <- rast("02_data/01_inputs/TraCE21_fine_elevation_22kaBP_1500CE_withBathy_inttime.nc")
+oro_high <- c(oro_high, oro_high[[rep(2151,4)]])
 oro_high
+nlyr(oro_high) == length(unique(time_steps[["dec"]]))
+time(oro_high) <- unique(time_steps[["dec"]])
+names(oro_high) <- names(oro)
+units(oro_high) <- "m"
+varnames(oro_high) <- "Orographic elevation"
+crs(oro_high) <- "EPSG:4326"
+oro_high
+panel(oro_high[[floor(seq(1, nlyr(oro_high), l = 6))]],
+      col = col_pal,
+      type = "interval",
+      breaks = c(-9000, -2000, -1000, -500, -100, -1, 0,
+                 10, 25, 50, 100, 200, 500, 1000, 1500, 3000),
+      fun = function() lines(land, col = "#000000", lwd = 1.5))
 
-plot(oro_high, col = col_pal,
-     type = "interval",
-     breaks = c(-9000, -2000, -1000, -500, -100, -1, 0,
-                10, 25, 50, 100, 200, 500, 1000, 1500, 3000),
-     fun = function() lines(land, col = "#000000", lwd = 1.5))
+writeCDF(oro_high, "/media/dafcluster4/storage/TraCE_Decadal_halfDeg/oro_high.nc",
+         compression = 3,
+         chunksizes = c(1130, 1130, 1),
+         longname = "Orographic elevation", overwrite = TRUE, unit = "m",
+         shuffle = TRUE,
+         zname = "time", prec = "integer")
 
-# GEBCO 2014
-bathy <- rast("~/Documents/GEBCO_2014_2D_Sahul.nc", win = ext(template)) # single layer, contemporary
-bathy
-
-plot(bathy, col = col_pal,
-     type = "interval",
-     breaks = c(-9000, -2000, -1000, -500, -100, -1, 0,
-                10, 25, 50, 100, 200, 500, 1000, 1500, 3000),
-     fun = function() lines(land, col = "#000000", lwd = 1.5))
-
-# blend
-blended <- ifel(oro_high < 0, bathy, oro_high)
-blended
-minmax(blended)
-plot(blended, col = col_pal,
-     type = "interval",
-     breaks = c(-9000, -2000, -1000, -500, -100, -1, 0,
-                10, 25, 50, 100, 200, 500, 1000, 1500, 3000),
-     fun = function() lines(land, col = "#000000", lwd = 1.5))
-
-# mean aggregation to ~5km grid
-tmp_rst <- rast(
-  res = 0.05, extent = ext(template),
-  crs = "EPSG:4326")
-tmp_rst
-oro_5 <- project(blended, tmp_rst,
-                 method = "average", use_gdal = TRUE)
-plot(oro_5,
-     col = col_pal,
-     type = "interval",
-     breaks = c(-9000, -2000, -1000, -500, -100, -1, 0,
-                10, 25, 50, 100, 200, 500, 1000, 1500, 3000),
-     fun = function() lines(land, col = "#000000", lwd = 1.5))
-
-oro_5 <- setValues(oro_5, round(values(oro_5), 0)) # round to nearest metre
-oro_5 <- ifel(oro_5 < 0, 0, oro_5)
-units(oro_5) <- "m"
-varnames(oro_5) <- "Orographic elevation"
-crs(oro_5) <- "EPSG:4326"
-oro_5
-
-writeCDF(oro_5,
-         "/home/dafcluster4/Desktop/CHELSA_LGM/oro_high.nc", #02_data/02_processed/oro_high.nc",
-         varname = "elevation", longname = "Orographic elevation",
-         unit = "m", prec = "float", compression = 1,
-         missval = NA, overwrite = TRUE)
+oro_high <- rast("/media/dafcluster4/storage/TraCE_Decadal_halfDeg/oro_high.nc")
+oro_high
 
 # merc_template
 template_raster <- rast(
-  extent = ext(blended),
+  extent = ext(oro_high),
   crs = "EPSG:4326",
-  resolution = res(blended),
+  resolution = res(oro_high),
   vals = 1L)
 sahul_prj <- "EPSG:3395"
 
@@ -403,32 +392,16 @@ template_raster <- project(template_raster, sahul_prj,
 template_raster
 plot(template_raster, fun = function() lines(project(land, template_raster)))
 
-# merc template only ever grabs the first step in Karger et al original code,
-# so we can just use 22k
-merc_template <- project(blended,
+merc_template <- project(oro_high,
                          template_raster,
-                         use_gdal = TRUE,
-                         method = "average")
+                         threads = TRUE,
+                         method = "cubicspline")
 merc_template
-plot(merc_template,
-     col = col_pal,
-     type = "interval",
-     breaks = c(-9000, -2000, -1000, -500, -100, -1, 0,
-                10, 25, 50, 100, 200, 500, 1000, 1500, 3000),
-     fun = function() lines(project(land, template_raster),
-                            col = "#000000", lwd = 1.5))
 
 writeCDF(merc_template,
-         "/home/dafcluster4/Desktop/CHELSA_LGM/merc_template.nc",#"02_data/02_processed/merc_template.nc",
-         varname = "elevation", longname = "Orographic elevation",
-         unit = "m", prec = "float", compression = 1,
-         missval = NA, overwrite = TRUE)
-
-# set up the CHELSA paleo folders
-sapply(
-  paste0(
-    "/media/dafcluster4/storage/TraCE_22k_1500CE/",
-    c("orog", "static", "clim", "out/tas", "out/tasmax", "out/tasmin",
-      "out/pr")),
-  dir.create,
-  recursive = TRUE)
+         "/media/dafcluster4/storage/TraCE_Decadal_halfDeg/merc_template.nc",
+         compression = 3,
+         chunksizes = c(1130, 1130, 1),
+         longname = "Orographic elevation", overwrite = TRUE, unit = "m",
+         shuffle = TRUE,
+         zname = "time", prec = "integer")
