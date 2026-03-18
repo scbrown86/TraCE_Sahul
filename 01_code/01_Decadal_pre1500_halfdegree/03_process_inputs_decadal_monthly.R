@@ -392,16 +392,42 @@ template_raster <- project(template_raster, sahul_prj,
 template_raster
 plot(template_raster, fun = function() lines(project(land, template_raster)))
 
-merc_template <- project(oro_high,
-                         template_raster,
-                         threads = TRUE,
-                         method = "cubicspline")
-merc_template
+proj_merc <- pblapply(1:nlyr(oro_high), function(x) {
+  merc_template <- project(oro_high[[x]],
+                           template_raster,
+                           threads = TRUE,
+                           method = "cubicspline")
+  merc_template <- ifel(merc_template < 0, 0, merc_template)
+  safe_writeCDF <- purrr::safely(writeCDF)
+  result <- safe_writeCDF(merc_template,
+                          sprintf("/media/dafcluster4/storage/TraCE_Decadal_halfDeg/merc_template/merc_template_%04d.nc", x),
+                          compression = 3,
+                          chunksizes = c(1718, 1572, 1),
+                          longname = "Orographic elevation", overwrite = TRUE, unit = "m",
+                          shuffle = TRUE,
+                          zname = "time", prec = "integer")
+  if (!is.null(result$error)) {
+    message(sprintf("Error writing layer %d: %s", x, conditionMessage(result$error)))
+    return(NULL)
+  }
+  if (file.exists(sprintf("/media/dafcluster4/storage/TraCE_Decadal_halfDeg/merc_template/merc_template_%04d.nc", x))) {
+    return((sprintf("/media/dafcluster4/storage/TraCE_Decadal_halfDeg/merc_template/merc_template_%04d.nc", x)))
+  } else {
+    NULL
+  }
+})
+proj_merc
 
-writeCDF(merc_template,
-         "/media/dafcluster4/storage/TraCE_Decadal_halfDeg/merc_template.nc",
-         compression = 3,
-         chunksizes = c(1130, 1130, 1),
-         longname = "Orographic elevation", overwrite = TRUE, unit = "m",
-         shuffle = TRUE,
-         zname = "time", prec = "integer")
+# merc_template <- project(oro_high,
+#                          template_raster,
+#                          threads = TRUE,
+#                          method = "cubicspline")
+# merc_template
+#
+# writeCDF(merc_template,
+#          "/media/dafcluster4/storage/TraCE_Decadal_halfDeg/merc_template/merc_template.nc",
+#          compression = 3,
+#          chunksizes = c(1130, 1130, 1),
+#          longname = "Orographic elevation", overwrite = TRUE, unit = "m",
+#          shuffle = TRUE,
+#          zname = "time", prec = "integer")

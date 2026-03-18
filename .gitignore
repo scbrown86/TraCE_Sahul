@@ -81,3 +81,5 @@ fine_scale_interp.nc
 fine_scale_subset.nc
 02_data/01_inputs/TraCE21_fine_elevation_22kaBP_1500CE_withBathy_inttime.nc
 02_data/01_inputs/TraCE21_fine_elevation_22kaBP_1500CE_withBathy.nc
+02_data/01_inputs/TraCE21_22kaBP_1500CE_mask_inttime.nc
+02_data/01_inputs/TraCE21_22kaBP_1500CE_mask.nc

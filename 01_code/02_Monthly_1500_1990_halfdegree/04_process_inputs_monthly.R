@@ -280,6 +280,8 @@ plot(bathy, col = col_pal,
      fun = function() lines(land, col = "#000000", lwd = 1.5))
 
 # blend
+blended_land <- ifel(oro_high > 0, oro_high, bathy)
+plot(blended_land > 0)
 blended <- ifel(bathy < 0, bathy, oro_high)
 blended
 minmax(blended)
@@ -294,6 +296,13 @@ tmp_rst <- rast(
   res = 0.05, extent = ext(template),
   crs = "EPSG:4326")
 tmp_rst
+oro_mask <- project(blended_land > 0, tmp_rst,
+                    method = "mode", use_gdal = TRUE)
+oro_mask <- ifel(oro_mask == 0, NA_integer_, 1L)
+plot(oro_mask, fun = function() lines(land))
+writeRaster(oro_mask, "02_data/02_processed/oro_mask.tif",
+            overwrite = TRUE)
+
 oro_5 <- project(blended, tmp_rst,
                  method = "average", use_gdal = TRUE)
 
@@ -322,6 +331,15 @@ writeCDF(oro_5,
          varname = "elevation", longname = "Orographic elevation",
          unit = "m", prec = "float", compression = 1,
          missval = NA, overwrite = TRUE)
+
+oro_5 <- rast("02_data/02_processed/oro_high.nc")
+plot(oro_5,
+     col = col_pal,
+     type = "interval",
+     breaks = c(-9000, -2000, -1000, -500, -100, -1, 0,
+                10, 25, 50, 100, 200, 500, 1000, 1500, 3000),
+     fun = function() lines(land, col = "#000000", lwd = 1.5))
+
 
 # merc_template
 template_raster <- rast(

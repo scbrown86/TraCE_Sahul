@@ -41,8 +41,6 @@ export INPUT_DIR="$OUTPUT_BASE/"
 export OUTPUT_DIR="$OUTPUT_BASE/out/"
 export SCRATCH_DIR="/home/dafcluster4/scratch/"
  
-# singularity exec "$SINGULARITY_IMG" python "$SCRIPT" -t 1 -i "$INPUT_DIR" -o "$OUTPUT_DIR" -tmp "$SCRATCH_DIR" # TEST 1 timestep
- 
 # File list
 CLIM_FILES=(huss.nc pr.nc ta_high.nc ta_low.nc tasmax.nc tasmin.nc tas.nc uwind.nc vwind.nc zg_high.nc zg_low.nc)
  
@@ -134,52 +132,101 @@ echo "------------------------------------------" >>"$LOG_FILE"
 conda deactivate || true
 conda activate nco_stable
 
-variables=("pr" "tas" "tasmax" "tasmin")
+variables=("pr" "tasmax" "tasmin")
+mask="${BASE_DIR}/orog/oro_mask.nc"
+mask_cf="${BASE_DIR}/orog/oro_mask_cf.nc"
+first_file=$(find "${BASE_DIR}"/chunk_out/*/out/pr -type f -name '*.nc' | sort -V | head -1)
+
+# set the static mask
+gdal_translate \
+    -of netCDF \
+    -mo "long_name=mask" \
+    /home/dafcluster4/Documents/GitHub/TraCE_Sahul/02_data/02_processed/oro_mask.tif \
+    ${mask}
+ncrename -v Band1,mask ${mask}
+cdo -s -w -L -b F32 setmisstoc,0 \
+    -remapnn,"${first_file}" \
+    "${mask}" \
+    "${mask_cf}"
 
 for var in "${variables[@]}"; do
     echo "processing variable: ${var}..."
-    outfile="${BASE_DIR}/out/${var}/TraCE_downscaled_1500_1990_concat.nc"
-    echo "outfile = ${outfile}"
-    find "${BASE_DIR}"/chunk_out/*/out/"${var}" -type f -name '*.nc' | sort -V >"${BASE_DIR}/${var}_concat_input_order.txt"
-    cdo -O -L \
-        -settaxis,1500-01-16,,1month \
-        -setcalendar,365_day \
-        -cat \
-        -unpack \
-        $(find "${BASE_DIR}"/chunk_out/*/out/"${var}" -type f -name '*.nc' | sort -V) \
-        "${outfile}"
-    # use $outfile to generate monthly climatology from 1980 onwards
-    outclim="${BASE_DIR}/out/${var}/TraCE_downscaled_1980_1990_climatology.nc"
-    if [[ $var = "pr" ]]; then
-        cdo -O -L setunit,'mm/month' \
-            -muldpm \
-            -mulc,86400 \
-            -ymonmean -selyear,1980/1989 \
-            ${outfile} ${outclim}
+    outfile="${BASE_DIR}/out/${var}/TraCE-Sahul_1500_1990_${var}.nc"
+    outfileM="${BASE_DIR}/out/${var}/TraCE-Sahul_1500_1990_${var}_masked.nc"
+    outclim="${BASE_DIR}/out/${var}/TraCE-Sahul_1980_1990_${var}_climatology.nc"
+    outclim2="${BASE_DIR}/out/${var}/TraCE-Sahul_1910_1990_${var}_climatology.nc"
+    if [[ ! -e "${outfile}" ]]; then
+        echo "outfile = ${outfile}"
+        find "${BASE_DIR}"/chunk_out/*/out/"${var}" -type f -name '*.nc' | sort -V >"${BASE_DIR}/${var}_concat_input_order.txt"
+        if [[ $var = "pr" ]]; then
+            echo "concatenating variable: ${var}..."
+            cdo -s -w -O -L -b F32 \
+                -setunit,'mm/month' \
+                -muldpm \
+                -mulc,86400 \
+                -settaxis,1500-01-16,,1month \
+                -setcalendar,365_day \
+                -cat \
+                -unpack \
+                $(find "${BASE_DIR}"/chunk_out/*/out/"${var}" -type f -name '*.nc' | sort -V) \
+                "${outfile}"
+            echo "masking variable: ${var}..."
+            cdo -s -w -O -L div "${outfile}" "${mask_cf}" "${outfileM}"
+            echo "packing variable: ${var}..."
+            cdo -f nc4 -P 100 -L -w -s -O -b U16 pack "${outfileM}" "${outfile}"
+            rm -rf "${outfileM}"
+        else
+            echo "concatenating variable: ${var}..."
+            cdo -s -w -O -L \
+                -setunit,'deg_C' \
+                -subc,273.15 \
+                -settaxis,1500-01-16,,1month \
+                -setcalendar,365_day \
+                -cat \
+                -unpack \
+                $(find "${BASE_DIR}"/chunk_out/*/out/"${var}" -type f -name '*.nc' | sort -V) \
+                "${outfile}"
+            echo "masking variable: ${var}..."
+            cdo -s -w -O -L div "${outfile}" "${mask_cf}" "${outfileM}"
+            echo "packing variable: ${var}..."
+            cdo -f nc4 -P 100 -L -w -s -O -b I16 pack "${outfileM}" "${outfile}"
+            rm -rf "${outfileM}"
+        fi
     else
-        cdo -O -L setunit,'deg_C' \
-            -subc,273.15 \
-            -ymonmean -selyear,1980/1989 \
-            ${outfile} ${outclim}
+        echo "skipping concat for ${var}: ${outfile} already exists"
+    fi
+    echo "Calculating climatologies for variable: ${var}..."
+    if [[ ! -e "${outclim}" ]]; then
+        cdo -s -w -O -L \
+            -ymonmean \
+            -selyear,1980/1989 \
+            "${outfile}" "${outclim}"
+        if [[ $var = "pr" ]]; then
+            cdo -f nc4 -P 100 -L -w -s -O -b U16 \
+                pack "${outclim}" "${outclim}_tmp.nc"
+        else
+            cdo -f nc4 -P 100 -L -w -s -O -b I16 \
+                pack "${outclim}" "${outclim}_tmp.nc"
+        fi
+        mv "${outclim}_tmp.nc" "${outclim}"
+    else
+        echo "skipping climatology: ${outclim} already exists"
+    fi
+    if [[ ! -e "${outclim2}" ]]; then
+        cdo -s -w -O -L \
+            -ymonmean \
+            -selyear,1910/1989 \
+            "${outfile}" "${outclim2}"
+        if [[ $var = "pr" ]]; then
+           cdo -f nc4 -P 100 -L -w -s -O -b U16 \
+                pack "${outclim2}" "${outclim2}_tmp.nc"
+        else
+           cdo -f nc4 -P 100 -L -w -s -O -b I16 \
+                pack "${outclim2}" "${outclim2}_tmp.nc"
+        fi
+        mv "${outclim2}_tmp.nc" "${outclim2}"
+    else
+        echo "skipping climatology: ${outclim2} already exists"
     fi
     echo "Done for variable: ${var}"
 done
-
-cdo -f nc sellonlatbox,105,161.25,-52.5,11.25 -const,1,global_0.5 "${BASE_DIR}/out/agg_target.nc"
-export CDO_REMAP_NORM="destarea"
-export REMAP_AREA_MIN=0.10
-cdo -P 100 gencon,"${BASE_DIR}/out/agg_target.nc" "${BASE_DIR}/out/pr/TraCE_downscaled_1980_1990_climatology.nc" "${BASE_DIR}/out/pr_weights.nc"
-export CDO_REMAP_NORM="fracarea"
-export REMAP_AREA_MIN=0.10
-cdo -P 100 gencon,"${BASE_DIR}/out/agg_target.nc" "${BASE_DIR}/out/tas/TraCE_downscaled_1980_1990_climatology.nc" "${BASE_DIR}/out/tas_weights.nc"
-
-export CDO_REMAP_NORM="destarea"
-export REMAP_AREA_MIN=0.10
-cdo -s -b F32 -P 100 remap,"${BASE_DIR}/out/agg_target.nc","${BASE_DIR}/out/pr_weights.nc" "${BASE_DIR}/out/pr/TraCE_downscaled_1980_1990_climatology.nc" "${BASE_DIR}/out/pr/TraCE_downscaled_1980_1990_climatology_coarse.nc"
-
-export CDO_REMAP_NORM="fracarea"
-export REMAP_AREA_MIN=0.10
-cdo -s -b F32 -P 100 remap,"${BASE_DIR}/out/agg_target.nc","${BASE_DIR}/out/tas_weights.nc" "${BASE_DIR}/out/tas/TraCE_downscaled_1980_1990_climatology.nc" "${BASE_DIR}/out/tas/TraCE_downscaled_1980_1990_climatology_coarse.nc"
-cdo -s -b F32 -P 100 remap,"${BASE_DIR}/out/agg_target.nc","${BASE_DIR}/out/tas_weights.nc" "${BASE_DIR}/out/tasmax/TraCE_downscaled_1980_1990_climatology.nc" "${BASE_DIR}/out/tasmax/TraCE_downscaled_1980_1990_climatology_coarse.nc"
-cdo -s -b F32 -P 100 remap,"${BASE_DIR}/out/agg_target.nc","${BASE_DIR}/out/tas_weights.nc" "${BASE_DIR}/out/tasmin/TraCE_downscaled_1980_1990_climatology.nc" "${BASE_DIR}/out/tasmin/TraCE_downscaled_1980_1990_climatology_coarse.nc"
-

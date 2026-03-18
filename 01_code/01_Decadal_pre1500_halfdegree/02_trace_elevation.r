@@ -253,3 +253,106 @@ panel(inter_orog[[floor(seq(1, nlyr(inter_orog), l = 6))]],
       breaks = c(-9000, -2000, -1000, -500, -100, -1, 0,
                  10, 25, 50, 100, 200, 500, 1000, 1500, 3000),
       fun = function() lines(land, col = "#000000", lwd = 1.5))
+
+# Make a mask for cleaning up the output files
+blended_topo_bath_mask <- pblapply(seq_len(nrow(time_steps)), function(i) {
+  tid <- time_steps[i, ][["timeID"]]
+  sl_row <- copy(sea_level)[sea_level$timeID == tid, ]
+  if (nrow(sl_row) == 0) {
+    warning(paste("No sea level entry for timeID", tid, "- skipping"),
+            immediate. = TRUE)
+    return(NULL)
+  }
+  sl_offset <- sl_row[["sealevel"]]
+  # Adjust bathymetry: subtract the (negative) sea level offset
+  # This raises the seafloor relative to contemporary datum.
+  # At LGM (sl = -122.2), bathy cells shallower than 122.2m become "land"
+  bathy_adj <- bathy - sl_offset
+  # Select the correct topography layer for this timestep
+  # Assumes layers in topo are ordered to match time_steps rows
+  topo_layer <- topo[[i]]
+  # Blend: use topo where it defines land (topo > 0), bathy_adj elsewhere
+  # Where topo > 0, that cell is land regardless of bathy
+  blended <- ifel(topo_layer > 0, topo_layer, bathy_adj)
+  blended <- (blended > 0)
+  blended <- resample(blended, template_05, "mode")
+  time(blended) <- time_steps[i, ][["BP"]]
+  varnames(blended) <- "mask"
+  units(blended) <- ""
+  return(blended)
+})
+blended_topo_bath_mask
+
+panel(c(blended_topo_bath_mask[[216]], blended_topo_bath_mask[[1]]),
+      fun = function() lines(land, col = "#000000", lwd = 1.5))
+
+blended_mask <- rast(blended_topo_bath_mask)
+plot(blended_mask[[1]])
+depth(blended_mask) <- NULL
+plot(blended_mask[[floor(seq(1, nlyr(blended_mask), l = 6))]])
+
+blended_mask <- blended_mask[[rev(1:nlyr(blended_mask))]]
+plot(blended_mask[[floor(seq(1, nlyr(blended_mask), l = 6))]],
+      fun = function() lines(land, col = "#000000", lwd = 1.5))
+
+# output elevation filename
+filename <- "02_data/01_inputs/TraCE21_22kaBP_1500CE_mask.nc"
+
+# Longitude and Latitude data
+xvals <- unique(values(init(blended_mask, "x")))
+yvals <- unique(values(init(blended_mask, "y")))
+nx <- length(xvals)
+ny <- length(yvals)
+lon <- ncdim_def("longitude", "degrees_east", xvals)
+lat <- ncdim_def("latitude", "degrees_north", yvals)
+
+# Missing value to use
+mv <- 0
+
+# Time component
+time_vals <- seq(0, by = 365, length.out = nlyr(blended_mask)) # 1 year step in days
+time <- ncdim_def(name = "time",
+                  units = "days since 1900-01-01",
+                  vals = time_vals,
+                  calendar = "365_day", ##<
+                  unlim = TRUE,
+                  longname = "time")
+
+# Define the mask variable
+var_mask <- ncvar_def(name = "mask",
+                      units = "",
+                      dim = list(lon, lat, time),
+                      longname = "land sea mask",
+                      missval = mv,
+                      prec = "integer",
+                      shuffle = TRUE,
+                      chunksizes = c(1130, 1130, 1),
+                      compression = 3)
+
+# Add the variables to the file
+ncout <- nc_create(filename, vars = var_mask, force_v4 = TRUE)
+print(paste("The file has", ncout$nvars,"variables"))
+print(paste("The file has", ncout$ndim,"dimensions"))
+
+# add some global attributes
+ncatt_put(ncout, 0, "Author", "Stuart C Brown")
+ncatt_put(ncout, 0, "Affiliation", "Adelaide University")
+ncatt_put(ncout, 0, "Sources", "Karger at al DEM's and GEBCO2014")
+ncatt_put(ncout, 0, "Created on", date())
+ncatt_put(ncout, 0, "Timesteps (BP)", as.character(as.vector(time(blended_mask))))
+ncatt_put(ncout, 0, "Timesteps (CE)", as.character(as.vector(rcarbon::BPtoBCAD(time(blended_mask)))))
+# Place the values in the file
+for (i in 1:nlyr(blended_mask)) {
+  ncvar_put(nc = ncout,
+            varid = var_mask,
+            vals = values(blended_mask[[i]]),
+            start = c(1, 1, i),
+            count = c(-1, -1, 1))
+}
+# Close the netcdf file when finished adding variables
+nc_close(ncout)
+
+# time interpolate with CDO
+# file=02_data/01_inputs/TraCE21_22kaBP_1500CE_mask.nc
+# outfile=02_data/01_inputs/TraCE21_22kaBP_1500CE_mask_inttime.nc
+# cdo -P 100 -L -b I16 -f nc4 -z zip_3 -k grid intntime,10 $file $outfile

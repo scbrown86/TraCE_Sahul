@@ -6,29 +6,34 @@ conda deactivate || true
 # CD
 cd /home/dafcluster4/Documents/GitHub/TraCE_Sahul
 
-# Input directories
-BASE_DIR="/media/dafcluster4/storage/TraCE_22k_1500CE"
+# Input directories (where input data is stored)
+BASE_DIR="/media/dafcluster4/storage/TraCE_Decadal_halfDeg"
 CLIM_DIR="${BASE_DIR}/clim"
 ORO_DIR="${BASE_DIR}/orog"
-STATIC_FILE="${BASE_DIR}/static/merc_template.nc"
+STATIC_FOLDER="${BASE_DIR}/merc_template" # contains merc_template for each chunk
+
 LOG_FILE="${BASE_DIR}/processing_time.txt"
 
-# Output base
+# Output base  (where temporary [chunked] input data is stored)
 OUTPUT_BASE="/home/dafcluster4/Documents/GitHub/TraCE_Sahul/02_data/03_CHELSA_paleo"
 CLIM_OUT="${OUTPUT_BASE}/clim"
 ORO_OUT="${OUTPUT_BASE}/orog"
 STATIC_OUT="${OUTPUT_BASE}/static"
+STATIC_FILE="${STATIC_OUT}/merc_template.nc" # needs to be created for each chunk
+
+# Final output
+OUTPUT_FINAL="/media/dafcluster4/storage/TraCE_22k_1500CE"
+FINAL_OUT="${OUTPUT_FINAL}/out"
+mkdir -p "$FINAL_OUT/pr" "$FINAL_OUT/tas" "$FINAL_OUT/tasmax" "$FINAL_OUT/tasmin"
 
 # Local temporary output dir
 LOCAL_OUT="${OUTPUT_BASE}/out"
 mkdir -p "$LOCAL_OUT/pr" "$LOCAL_OUT/tas" "$LOCAL_OUT/tasmax" "$LOCAL_OUT/tasmin"
 
-mkdir -p "$CLIM_OUT" "$ORO_OUT" "$STATIC_OUT"
-cp -n "$STATIC_FILE" "$STATIC_OUT/" # only copy if not already there
-
 # Constants
 TOTAL_TIMESTEPS=25860
 CHUNK_SIZE=12
+TOTAL_CHUNKS=$(( (TOTAL_TIMESTEPS + CHUNK_SIZE - 1) / CHUNK_SIZE ))
 
 # deactivate conda environment
 conda deactivate || true
@@ -37,15 +42,21 @@ conda deactivate || true
 export SINGULARITY_IMG="/home/dafcluster4/chelsa_paleo/singularity/chelsa_paleo.sif"
 export SCRIPT="/home/dafcluster4/chelsa_paleo/src/chelsa.py"
 export INPUT_DIR="$OUTPUT_BASE/"
+export OUTPUT_DIR="$OUTPUT_BASE/out/"
 export SCRATCH_DIR="/home/dafcluster4/scratch/"
+
+# singularity exec "$SINGULARITY_IMG" python "$SCRIPT" -t 1 -i "$INPUT_DIR" -o "$OUTPUT_DIR" -tmp "$SCRATCH_DIR" # TEST 1 timestep
 
 # File list
 CLIM_FILES=(huss.nc pr.nc ta_high.nc ta_low.nc tasmax.nc tasmin.nc tas.nc uwind.nc vwind.nc zg_high.nc zg_low.nc)
 ORO_FILES=(oro.nc oro_high.nc)
+MASK_FILE="/home/dafcluster4/Documents/GitHub/TraCE_Sahul/02_data/01_inputs/TraCE21_22kaBP_1500CE_mask_inttime.nc"
 
 # Start the log file
 echo "Processing started: $(date)" >"$LOG_FILE"
 echo "------------------------------------------" >>"$LOG_FILE"
+
+TOTAL_ELAPSED=0
 
 # Loop over each time chunk
 for ((t = 1; t <= TOTAL_TIMESTEPS; t += CHUNK_SIZE)); do
@@ -66,26 +77,18 @@ for ((t = 1; t <= TOTAL_TIMESTEPS; t += CHUNK_SIZE)); do
         outfile="${ORO_OUT}/${file}"
         cdo -L -w -s seltimestep,"${aux_step}" "$infile" "$outfile" >/dev/null 2>&1
     done
-    # need to remap the oro_high to the coarse resolution
-    ## "Clean" the netcdf files
-    gdal_translate "${ORO_OUT}/oro_high.nc" "${ORO_OUT}/oro_high.tif" >/dev/null 2>&1
-    gdal_translate "${ORO_OUT}/oro_high.tif" "${ORO_OUT}/oro_high.nc" >/dev/null 2>&1
-    gdal_translate "${ORO_OUT}/oro.nc" "${ORO_OUT}/oro.tif" >/dev/null 2>&1
-    gdal_translate "${ORO_OUT}/oro.tif" "${ORO_OUT}/oro.nc" >/dev/null 2>&1
-    # regridding high res to coarse res
-    ncpdq -D 0 -O -U "${ORO_OUT}/oro_high.nc" "${ORO_OUT}/oro_high.nc" # need to "unpack" data before regridding
-    ncremap -D 0 -a nco_con -t 100 -d "${ORO_OUT}/oro.nc" "${ORO_OUT}/oro_high.nc" "${ORO_OUT}/oro_remap.nc" >/dev/null 2>&1
-    cdo -s -w -L -b F32 -selgrid,2 "${ORO_OUT}/oro_remap.nc" "${ORO_OUT}/oro_remap2.nc"
-    cdo -s -w -L -b F32 setmisstoc,0 -remapnn,"${ORO_OUT}/oro_remap2.nc" "${ORO_OUT}/oro_remap2.nc" "${ORO_OUT}/oro_remap.nc"
-    rm -f "${ORO_OUT}/oro_remap2.nc"
-    # ensure orographic and bathymetric coverage at coarse resolution
-    cdo -O -b F32 -s -w -L ifthenelse "${ORO_OUT}/oro_remap.nc" "${ORO_OUT}/oro_remap.nc" "${ORO_OUT}/oro.nc" "${ORO_OUT}/oro_remap2.nc"
-    cdo -s -w -L copy "${ORO_OUT}/oro_remap2.nc" "${ORO_OUT}/oro.nc"
-    rm -f "${ORO_OUT}/oro_remap.nc" "${ORO_OUT}/oro_remap2.nc" "${ORO_OUT}/oro_high.tif" "${ORO_OUT}/oro.tif"
-    # "Clean" final version
-    gdal_translate "${ORO_OUT}/oro.nc" "${ORO_OUT}/oro.tif" >/dev/null 2>&1
-    gdal_translate "${ORO_OUT}/oro.tif" "${ORO_OUT}/oro.nc" >/dev/null 2>&1
-    rm -f "${ORO_OUT}/oro.tif"
+    # Copy the relevant merc_template
+    STATIC_FILE_SRC="${STATIC_FOLDER}/merc_template_$(printf '%04d' "$aux_step").nc"
+    cp "$STATIC_FILE_SRC" "$STATIC_FILE"
+    # Copy the relevant mask
+    MASK_OUT="${INPUT_DIR}mask_${aux_step}.nc"
+    mask_aux="${aux_step}"
+    if ((mask_aux > 2151)); then
+        mask_aux=2151
+    fi
+    cdo -L -w -s remapnn,/media/dafcluster4/storage/TraCE_1500_1990CE/1500_1990/out/pr/TraCE-Sahul_1500_1990_pr.nc \
+        -seltimestep,"${mask_aux}" \
+        "${MASK_FILE}" "${MASK_OUT}" >/dev/null 2>&1
     export OUTPUT_DIR="$LOCAL_OUT/"
     export START=1
     export END=12
@@ -99,8 +102,47 @@ for ((t = 1; t <= TOTAL_TIMESTEPS; t += CHUNK_SIZE)); do
         singularity exec "$SINGULARITY_IMG" python "$SCRIPT" -t {} -i "$INPUT_DIR" -o "$OUTPUT_DIR" -tmp "$TMP_DIR" > /dev/null 2>&1 &&
         rm -rf "$TMP_DIR"
     '
+    # Mask each of the output files
+    conda deactivate || true
+    conda activate nco_stable
+    for var in pr tas tasmax tasmin; do
+        # mask
+        for FILE in "${LOCAL_OUT}/${var}"/CHELSA_${var}_*.nc; do
+            cdo -s -w -L -f nc4 -b F32 \
+                -div "$FILE" "$MASK_OUT" \
+                "${FILE}_tmp.nc"
+            cp -f "${FILE}_tmp.nc" "$FILE"
+            rm "${FILE}_tmp.nc"
+        done
+        # concat, change units and pack
+        tmp_outcat="${LOCAL_OUT}/${var}/CHELSA_${var}_1_V.1.0_chunk$(printf '%04d' "$aux_step").nc"
+        if [[ $var = "pr" ]]; then            
+            cdo -f nc4 -b U16 -P 100 -L -w -s -O \
+                -pack \
+                -setunit,'mm/month' \
+                -muldpm \
+                -mulc,86400 \
+                -settaxis,2000-01-16,,1month \
+                -setcalendar,365_day \
+                -cat \
+                -unpack \
+                $(find "${LOCAL_OUT}/${var}/" -type f -name '*.nc' | sort -V) \
+                "${tmp_outcat}"
+        else
+            cdo -f nc4 -b I16 -P 100 -L -w -s -O \
+                -pack \
+                -setunit,'deg_C' \
+                -subc,273.15 \
+                -settaxis,2000-01-16,,1month \
+                -setcalendar,365_day \
+                -cat \
+                -unpack \
+                $(find "${LOCAL_OUT}/${var}/" -type f -name '*.nc' | sort -V) \
+                "${tmp_outcat}"
+        fi
+    done
     # Output dir for this chunk
-    TIME_DIR="${BASE_DIR}/chunk_out/$(printf "%05d_%05d" "$t" "$t_end")/out"
+    TIME_DIR="${OUTPUT_FINAL}/chunk_out/$(printf "%05d_%05d" "$t" "$t_end")/out"
     mkdir -p "$TIME_DIR/pr" "$TIME_DIR/tas" "$TIME_DIR/tasmax" "$TIME_DIR/tasmin"
     # Move outputs to external chunk directory
     mv "$LOCAL_OUT/pr"/* "$TIME_DIR/pr/" 2>/dev/null || true
@@ -108,6 +150,7 @@ for ((t = 1; t <= TOTAL_TIMESTEPS; t += CHUNK_SIZE)); do
     mv "$LOCAL_OUT/tasmax"/* "$TIME_DIR/tasmax/" 2>/dev/null || true
     mv "$LOCAL_OUT/tasmin"/* "$TIME_DIR/tasmin/" 2>/dev/null || true
     # Clean up local output dir and scratch
+    rm -rf "$MASK_OUT"
     find "$LOCAL_OUT" -type f -name "*.nc" -delete
     find "$CLIM_OUT" -type f -name "*.nc" -delete
     find "$ORO_OUT" -type f -name "*.nc" -delete
@@ -121,23 +164,18 @@ for ((t = 1; t <= TOTAL_TIMESTEPS; t += CHUNK_SIZE)); do
     echo "$LOG_LINE" >>"$LOG_FILE"
     # Estimate remaining time
     COMPLETED_STEPS=$((aux_step))
-    REMAINING_STEPS=$((TOTAL_TIMESTEPS / CHUNK_SIZE - COMPLETED_STEPS))
-    AVG_TIME_PER_CHUNK=$((ELAPSED / 1))
-    if [ $COMPLETED_STEPS -eq 1 ]; then
-        TOTAL_ELAPSED=$ELAPSED
-    else
-        TOTAL_ELAPSED=$((TOTAL_ELAPSED + ELAPSED))
-        AVG_TIME_PER_CHUNK=$((TOTAL_ELAPSED / COMPLETED_STEPS))
-    fi
+    TOTAL_ELAPSED=$((TOTAL_ELAPSED + ELAPSED))
+    AVG_TIME_PER_CHUNK=$((TOTAL_ELAPSED / COMPLETED_STEPS))
+    REMAINING_STEPS=$((TOTAL_CHUNKS - COMPLETED_STEPS))
     REMAINING_SECONDS=$((AVG_TIME_PER_CHUNK * REMAINING_STEPS))
-    PROGRESS_PERCENT=$(printf "%.2f" "$(echo "$COMPLETED_STEPS * 100 / ($TOTAL_TIMESTEPS / $CHUNK_SIZE)" | bc -l)")
+    PROGRESS_PERCENT=$(printf "%.2f" "$(echo "$COMPLETED_STEPS * 100 / $TOTAL_CHUNKS" | bc -l)")
     ETA_LINE=$(printf "Estimated time remaining: %d days %02d hours %02d min %02d sec\n" \
         $((REMAINING_SECONDS / 86400)) \
         $((REMAINING_SECONDS % 86400 / 3600)) \
         $((REMAINING_SECONDS % 3600 / 60)) \
         $((REMAINING_SECONDS % 60)))
     echo "$ETA_LINE"
-    echo "Progress: $PROGRESS_PERCENT% complete\n"
+    printf "Progress: $PROGRESS_PERCENT%% complete\n"
 done
 
 # Finish the log
