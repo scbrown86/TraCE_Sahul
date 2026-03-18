@@ -7,7 +7,7 @@ conda deactivate || true
 cd /home/dafcluster4/Documents/GitHub/TraCE_Sahul
 
 # Input directories (where input data is stored)
-BASE_DIR="/media/dafcluster4/storage/TraCE_Decadal_halfDeg"
+BASE_DIR="/media/dafcluster4/storage/TraCE_22k_1500CE"
 CLIM_DIR="${BASE_DIR}/clim"
 ORO_DIR="${BASE_DIR}/orog"
 STATIC_FOLDER="${BASE_DIR}/merc_template" # contains merc_template for each chunk
@@ -22,8 +22,7 @@ STATIC_OUT="${OUTPUT_BASE}/static"
 STATIC_FILE="${STATIC_OUT}/merc_template.nc" # needs to be created for each chunk
 
 # Final output
-OUTPUT_FINAL="/media/dafcluster4/storage/TraCE_22k_1500CE"
-FINAL_OUT="${OUTPUT_FINAL}/out"
+FINAL_OUT="${BASE_DIR}/out"
 mkdir -p "$FINAL_OUT/pr" "$FINAL_OUT/tas" "$FINAL_OUT/tasmax" "$FINAL_OUT/tasmin"
 
 # Local temporary output dir
@@ -105,7 +104,7 @@ for ((t = 1; t <= TOTAL_TIMESTEPS; t += CHUNK_SIZE)); do
     # Mask each of the output files
     conda deactivate || true
     conda activate nco_stable
-    for var in pr tas tasmax tasmin; do
+    for var in pr tasmax tasmin; do
         # mask
         for FILE in "${LOCAL_OUT}/${var}"/CHELSA_${var}_*.nc; do
             cdo -s -w -L -f nc4 -b F32 \
@@ -142,15 +141,15 @@ for ((t = 1; t <= TOTAL_TIMESTEPS; t += CHUNK_SIZE)); do
         fi
     done
     # Output dir for this chunk
-    TIME_DIR="${OUTPUT_FINAL}/chunk_out/$(printf "%05d_%05d" "$t" "$t_end")/out"
+    TIME_DIR="${BASE_DIR}/chunk_out/$(printf "%05d_%05d" "$t" "$t_end")/out"
     mkdir -p "$TIME_DIR/pr" "$TIME_DIR/tas" "$TIME_DIR/tasmax" "$TIME_DIR/tasmin"
     # Move outputs to external chunk directory
     mv "$LOCAL_OUT/pr"/* "$TIME_DIR/pr/" 2>/dev/null || true
-    mv "$LOCAL_OUT/tas"/* "$TIME_DIR/tas/" 2>/dev/null || true
     mv "$LOCAL_OUT/tasmax"/* "$TIME_DIR/tasmax/" 2>/dev/null || true
     mv "$LOCAL_OUT/tasmin"/* "$TIME_DIR/tasmin/" 2>/dev/null || true
     # Clean up local output dir and scratch
     rm -rf "$MASK_OUT"
+    rm -rf "$STATIC_FILE"
     find "$LOCAL_OUT" -type f -name "*.nc" -delete
     find "$CLIM_OUT" -type f -name "*.nc" -delete
     find "$ORO_OUT" -type f -name "*.nc" -delete
@@ -181,3 +180,69 @@ done
 # Finish the log
 echo "Processing finished: $(date)" >>"$LOG_FILE"
 echo "------------------------------------------" >>"$LOG_FILE"
+
+## TO DO: ALL BELOW!
+
+# concatentate the bias corrected files
+out_dir="/media/dafcluster4/storage/TraCE_22k_1500CE"
+unset variables
+variables=("pr" "tasmax" "tasmin")
+for var in "${variables[@]}"; do
+    echo -e "${GREEN}Concatenating ${var}...${RESET}"
+    # create temp file and output
+    tmp_outvar=$(mktemp --suffix "_${var}_concat.nc")
+    outfile="${out_dir}/out/${var}/TraCE_22ka_downscaled_${var}_decadal_21k_1500CE_biascorr.nc"
+    echo -e "${BLUE}    Outfile: $(basename "$(dirname "$outfile")")/$(basename "$outfile")${RESET}"
+    # store input order for debugging
+    find "${input_base}"/*/out/"${var}" -type f -name '*biascorr.nc' | sort -V >"${out_dir}/${var}_concat_input_order.txt"
+    # concat with CDO
+    cdo -f nc4 -P 100 -L -s -O \
+        -cat \
+        $(find "${input_base}"/*/out/"${var}" -type f -name '*biascorr.nc' | sort -V) \
+        "${tmp_outvar}"
+    # set time to 1...n with ncap2
+    echo -e "       ${YELLOW}Resetting time dimension...${RESET}"
+    ncap2 --4 -O -s 'time=array(1.0f,1.0f,$time); time@units=""' "${tmp_outvar}" "${tmp_outvar}"
+    # compress output
+    echo -e "       ${YELLOW}Packing output file...${RESET}"
+    cdo -f nc4 -s -L -O -P 100 pack "${tmp_outvar}" "${outfile}"
+    rm -f "${tmp_outvar}"
+    echo -e "${GREEN}Finished variable: ${var}${RESET}"
+done
+
+# Split the files into chunks
+base_dir="/media/dafcluster4/storage/TraCE_22k_1500CE/out"
+vars=(pr tasmax tasmin)
+
+# split the decadal data into 6 files
+chunk_sizes=(4812 4812 4812 4812 4812 1800) # final chunk will contain only 1800 layers
+for var in "${vars[@]}"; do
+    infile="${base_dir}/${var}/TraCE_22ka_downscaled_${var}_decadal_21k_1500CE_biascorr.nc"
+    echo -e "${GREEN}Splitting $var...${RESET}"
+    start=1
+    chunk_id=1
+    for chunk in "${chunk_sizes[@]}"; do
+        end=$(( start + chunk - 1 ))
+        outfile="${base_dir}/${var}/TraCE_22ka_downscaled_${var}_decadal_21k_1500CE_biascorr_$(printf "%02d" $chunk_id).nc"
+        echo -e "${YELLOW}      Creating $(basename "$(dirname "$outfile")")/$(basename "$outfile") (time ${start}-${end}${RESET})"
+        # Use CDO to extract the chunk range
+        cdo -f nc4 -P 100 -L seltimestep,${start}/${end} "$infile" "$outfile"
+        start=$(( end + 1 ))
+        ((chunk_id++))
+    done
+    echo "  Final timestep processed: $end"
+    echo -e "${GREEN}Finished $var...${RESET}"
+done
+
+# Now pass the split files through the R script to correct the time-index
+conda deactivate # deactivate the nco_stable env to use R
+for var in "${vars[@]}"; do
+    echo -e "${GREEN}Processing $var...${RESET}"
+    files=$(ls "${base_dir}/${var}"/*.nc | grep -E "biascorr(_[0-9]+)?\.nc$")
+    for f in $files; do
+        echo -e "${YELLOW}      Processing $(basename "$(dirname "$f")")/$(basename "$f")...${RESET}"
+        Rscript /home/dafcluster4/Documents/GitHub/TraCE_Sahul/01_code/01_Decadal_pre1500/06_split_and_add_timedims.R "$f"
+        echo -e "${YELLOW}      Finished $(basename "$(dirname "$f")")/$(basename "$f")...${RESET}"
+    done
+    echo -e "${GREEN}Finished $var...${RESET}"
+done
