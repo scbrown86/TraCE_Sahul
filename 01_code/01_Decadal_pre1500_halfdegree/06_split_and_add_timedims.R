@@ -23,8 +23,9 @@ time_steps <- fread("/home/dafcluster4/Documents/GitHub/TraCE_Sahul/02_data/down
 f <- nc_open(fil, write = TRUE)
 nt <- f$dim$time$len
 
+
 if (nt == 25860) { # if full file, then replace with full time index
-  time_index <- time_steps[["DecYear"]]
+  time_index <- time_steps[!is.na(dec), ][["dec_year"]]
   stopifnot(length(unique(time_index)) ==  length(time_index))
   stopifnot(nt == length(time_index))
   # Overwrite existing time variable
@@ -32,10 +33,17 @@ if (nt == 25860) { # if full file, then replace with full time index
   ncatt_put(f, "time", "units", "decimal year CE")
   ncatt_put(f, "time", "long_name", "decimal year (negative = BCE, positive = CE)")
   nc_close(f)
-} else { # else use the dates for the step only
+  # } 
+  # else if (nt == 5880) {
+  # time_index <- time_steps[is.na(dec), ][["dec_year"]]
+  # ncvar_put(f, "time", 0:(nt - 1))
+  # ncatt_put(f, "time", "units", "months since 1500-01-16")
+  # ncatt_put(f, "time", "calendar", "365_day")
+  # nc_close(f)
+  } else { # else use the dates for the step only
   # grab the "step" from the filename
   step <- as.integer(gsub(".nc", "", sapply(strsplit(basename(fil), "_"), tail, 1)))
-  time_index <- time_steps[file_step == step, ][["DecYear"]]
+  time_index <- time_steps[file_step == step, ][["dec_year"]]
   stopifnot(length(unique(time_index)) ==  length(time_index))
   stopifnot(nt == length(time_index))
   ncvar_put(f, "time", time_index)
