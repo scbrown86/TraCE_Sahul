@@ -14,7 +14,7 @@ vars=(pr tasmax tasmin)
 
 for var in "${vars[@]}"; do
     echo -e "${GREEN}Processing $var...${RESET}"
-    files=$(ls "${base_dir}/${var}"/TraCE-Sahul_decadal_22k_1500CE_${var}_*.nc | grep -v '_annSummary\.nc$' | sort -V)
+    files=$(ls "${base_dir}/${var}"/TraCE-Sahul_decadal_22k_1500CE_${var}*.nc | grep -v '_annSummary\.nc$' | sort -V)
     # files=$(ls "${base_dir}/${var}"/*.nc | grep -E "biascorr(_[0-9]+)?\.nc$")
     for f in $files; do
         echo -e "${YELLOW} Processing $(basename "$(dirname "$f")")/$(basename "$f")...${RESET}"
@@ -52,7 +52,7 @@ conda deactivate # deactivate the nco_stable env to use R
 base_dir="/home/dafcluster4/Desktop/TraCE-Sahul"
 for var in "${vars[@]}"; do
     echo -e "${GREEN}Processing $var...${RESET}"
-    files=$(ls "${base_dir}/${var}"/TraCE-Sahul_decadal_22k_1500CE_${var}_*.nc | grep -v '_annSummary\.nc$' | sort -V)
+    files=$(ls "${base_dir}/${var}"/TraCE-Sahul_decadal_22k_1500CE_${var}*.nc | grep -v '_annSummary\.nc$' | sort -V)
     for f in $files; do
         echo -e "${YELLOW}      Processing $(basename "$(dirname "$f")")/$(basename "$f")...${RESET}"
         Rscript /home/dafcluster4/Documents/GitHub/TraCE_Sahul/01_code/01_Decadal_pre1500_halfdegree/06_split_and_add_timedims.R "$f"
