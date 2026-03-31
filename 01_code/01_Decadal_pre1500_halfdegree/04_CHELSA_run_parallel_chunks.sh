@@ -198,7 +198,7 @@ for var in "${variables[@]}"; do
     echo -e "${GREEN}Concatenating ${var}...${RESET}"
     # create temp file and output
     tmp_outvar=$(mktemp --suffix "_${var}_concat.nc")
-    outfile="${out_dir}/out/${var}/TraCE-Sahul_decadal_21k_1500CE_${var}.nc"
+    outfile="${out_dir}/out/${var}/TraCE-Sahul_decadal_22k_1500CE_${var}.nc"
     echo -e "${BLUE}    Outfile: $(basename "$(dirname "$outfile")")/$(basename "$outfile")${RESET}"
     # store input order for debugging
     find "${BASE_DIR}/chunk_out"/*/out/"${var}" -type f -name '*chunk*.nc' | sort -V >"${BASE_DIR}/${var}_concat_input_order.txt"
@@ -228,14 +228,14 @@ vars=(pr tasmax tasmin)
 chunk_sizes=(4812 4812 4812 4812 4812 1800) # final chunk contains only 1800 layers
 echo -e "${BLUE}Splitting into ${#chunk_sizes[@]} chunks per variable...${RESET}"
 for var in "${vars[@]}"; do
-    infile="${OUT_DIR}/${var}/TraCE-Sahul_decadal_21k_1500CE_${var}.nc"
+    infile="${OUT_DIR}/${var}/TraCE-Sahul_decadal_22k_1500CE_${var}.nc"
     echo -e "${GREEN}Splitting $var...${RESET}"
     start=1
     chunk_id=1
     end=0
     for chunk in "${chunk_sizes[@]}"; do
         end=$((start + chunk - 1))
-        outfile="${OUT_DIR}/${var}/TraCE-Sahul_decadal_21k_1500CE_${var}_$(printf "%02d" $chunk_id).nc"
+        outfile="${OUT_DIR}/${var}/TraCE-Sahul_decadal_22k_1500CE_${var}_$(printf "%02d" $chunk_id).nc"
         echo -e "${YELLOW}      Creating $(basename "$(dirname "$outfile")")/$(basename "$outfile") (time ${start}-${end})${RESET}"
         if [[ $var == "pr" ]]; then
             cdo -f nc4 -b U16 -s -L -O -P 100 seltimestep,${start}/${end} "$infile" "$outfile"
@@ -254,7 +254,7 @@ conda deactivate # deactivate the nco_stable env to use R
 
 for var in "${vars[@]}"; do
     echo -e "${GREEN}Processing $var...${RESET}"
-    files=$(ls "${OUT_DIR}/${var}"/TraCE-Sahul_decadal_21k_1500CE_${var}_*.nc | sort -V)
+    files=$(ls "${OUT_DIR}/${var}"/TraCE-Sahul_decadal_22k_1500CE_${var}_*.nc | sort -V)
     for f in $files; do
         echo -e "${YELLOW}      Processing $(basename "$(dirname "$f")")/$(basename "$f")...${RESET}"
         Rscript /home/dafcluster4/Documents/GitHub/TraCE_Sahul/01_code/01_Decadal_pre1500_halfdegree/06_split_and_add_timedims.R "$f"
@@ -268,7 +268,7 @@ conda activate nco_stable
 
 for var in "${vars[@]}"; do
     echo -e "${GREEN}Processing $var...${RESET}"
-    files=$(ls "${OUT_DIR}/${var}"/TraCE-Sahul_decadal_21k_1500CE_${var}_*.nc | sort -V)
+    files=$(ls "${OUT_DIR}/${var}"/TraCE-Sahul_decadal_22k_1500CE_${var}_*.nc | sort -V)
     for f in $files; do
         f_base=$(basename "$f" .nc)
         outfile="${OUT_DIR}/${var}/${f_base}_annSummary.nc"
@@ -287,19 +287,19 @@ cdo -s -w -f nc4 -b F32 -O -P 100 \
     -timselsum,12 \
     -settaxis,1500-01-01,,1mon \
     -setcalendar,365_day \
-    "/media/dafcluster4/storage/TraCE_1500_1990CE/1500_1990/out/pr/TraCE-Sahul_1500_1990_pr.nc" \
-    "/media/dafcluster4/storage/TraCE_1500_1990CE/1500_1990/out/pr/TraCE-Sahul_1500_1990_pr_annSummary.nc"
+    "/media/dafcluster4/storage/TraCE_1500_1990CE/1500_1990/out/pr/TraCE-Sahul_annual_1500_1990_pr.nc" \
+    "/media/dafcluster4/storage/TraCE_1500_1990CE/1500_1990/out/pr/TraCE-Sahul_annual_1500_1990_pr_annSummary.nc"
 
 cdo -s -w -f nc4 -b F32 -O -P 100 \
     -timselmean,12 \
     -settaxis,1500-01-01,,1mon \
     -setcalendar,365_day \
-    "/media/dafcluster4/storage/TraCE_1500_1990CE/1500_1990/out/tasmax/TraCE-Sahul_1500_1990_tasmax.nc" \
-    "/media/dafcluster4/storage/TraCE_1500_1990CE/1500_1990/out/tasmax/TraCE-Sahul_1500_1990_tasmax_annSummary.nc"
+    "/media/dafcluster4/storage/TraCE_1500_1990CE/1500_1990/out/tasmax/TraCE-Sahul_annual_1500_1990_tasmax.nc" \
+    "/media/dafcluster4/storage/TraCE_1500_1990CE/1500_1990/out/tasmax/TraCE-Sahul_annual_1500_1990_tasmax_annSummary.nc"
 
 cdo -s -w -f nc4 -b F32 -O -P 100 \
     -timselmean,12 \
     -settaxis,1500-01-01,,1mon \
     -setcalendar,365_day \
-    "/media/dafcluster4/storage/TraCE_1500_1990CE/1500_1990/out/tasmin/TraCE-Sahul_1500_1990_tasmin.nc" \
-    "/media/dafcluster4/storage/TraCE_1500_1990CE/1500_1990/out/tasmin/TraCE-Sahul_1500_1990_tasmin_annSummary.nc"
+    "/media/dafcluster4/storage/TraCE_1500_1990CE/1500_1990/out/tasmin/TraCE-Sahul_annual_1500_1990_tasmin.nc" \
+    "/media/dafcluster4/storage/TraCE_1500_1990CE/1500_1990/out/tasmin/TraCE-Sahul_annual_1500_1990_tasmin_annSummary.nc"

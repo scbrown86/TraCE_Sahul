@@ -151,8 +151,8 @@ cdo -s -w -L -b F32 setmisstoc,0 \
 
 for var in "${variables[@]}"; do
     echo "processing variable: ${var}..."
-    outfile="${BASE_DIR}/out/${var}/TraCE-Sahul_1500_1990_${var}.nc"
-    outfileM="${BASE_DIR}/out/${var}/TraCE-Sahul_1500_1990_${var}_masked.nc"
+    outfile="${BASE_DIR}/out/${var}/TraCE-Sahul_annual_1500_1990_${var}.nc"
+    outfileM="${BASE_DIR}/out/${var}/TraCE-Sahul_annual_1500_1990_${var}_masked.nc"
     outclim="${BASE_DIR}/out/${var}/TraCE-Sahul_1980_1990_${var}_climatology.nc"
     outclim2="${BASE_DIR}/out/${var}/TraCE-Sahul_1910_1990_${var}_climatology.nc"
     if [[ ! -e "${outfile}" ]]; then
