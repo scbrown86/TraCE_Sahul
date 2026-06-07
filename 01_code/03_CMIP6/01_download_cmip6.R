@@ -99,3 +99,32 @@ download_results <- cmip_download(
 
 length(download_results)
 download_results[[1]]
+
+# download daily NorEMS2 data
+# data will need to be aggregated to monthly in processing script
+nor_url <- "https://esgf-node.ornl.gov/esgf-1-5-bridge?project=CMIP6&offset=0&limit=100&type=Dataset&format=application%2Fsolr%2Bjson&facets=activity_id%2C+data_node%2C+source_id%2C+institution_id%2C+source_type%2C+experiment_id%2C+sub_experiment_id%2C+nominal_resolution%2C+variant_label%2C+grid_label%2C+table_id%2C+frequency%2C+realm%2C+variable_id%2C+cf_standard_name&latest=true&query=*&experiment_id=ssp245%2Cssp585%2Cssp370%2Cssp126%2Chistorical&frequency=day&source_id=NorESM2-MM&variable_id=tasmin%2Ctasmax%2Cpr&variant_label=r1i1p1f1"
+nor_query <- cmip_url_to_list(nor_url)
+
+nor_results <- cmip_search(query = nor_query)
+saveRDS(nor_results, "CMIP6_nor_query_results.RDS")
+nor_results <- readRDS("CMIP6_nor_query_results.RDS")
+cmip_info(nor_results)
+nor_results_clean <- filter_replicas_smart(nor_results)
+cmip_info(nor_results_clean)
+nor_results_clean[, .N, by = data_node][order(-N)]
+nor_results_clean[1:10, ]
+
+nor_model_avail <- nor_results_clean |>
+  filter_replicas_smart() |>
+  cmip_simplify() |>
+  summarise_cmip6_availability()
+nor_model_avail
+
+nor_download_results <- cmip_download(
+  results = nor_results_clean,
+  root = "/mnt/Data/CMIP6/",
+  year_range = c(1850, 2100), #< restrict to 1850:2100 due to file size
+  download_config = dl_config)
+
+length(nor_download_results)
+nor_download_results[[1]]
