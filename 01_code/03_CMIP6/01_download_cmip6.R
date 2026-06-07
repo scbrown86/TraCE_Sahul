@@ -102,7 +102,7 @@ download_results[[1]]
 
 # download daily NorEMS2 data
 # data will need to be aggregated to monthly in processing script
-nor_url <- "https://esgf-node.ornl.gov/esgf-1-5-bridge?project=CMIP6&offset=0&limit=100&type=Dataset&format=application%2Fsolr%2Bjson&facets=activity_id%2C+data_node%2C+source_id%2C+institution_id%2C+source_type%2C+experiment_id%2C+sub_experiment_id%2C+nominal_resolution%2C+variant_label%2C+grid_label%2C+table_id%2C+frequency%2C+realm%2C+variable_id%2C+cf_standard_name&latest=true&query=*&experiment_id=ssp245%2Cssp585%2Cssp370%2Cssp126%2Chistorical&frequency=day&source_id=NorESM2-MM&variable_id=tasmin%2Ctasmax%2Cpr&variant_label=r1i1p1f1"
+nor_url <- "https://esgf-node.ornl.gov/esgf-1-5-bridge?project=CMIP6&offset=0&limit=100&type=Dataset&format=application%2Fsolr%2Bjson&facets=activity_id%2C+data_node%2C+source_id%2C+institution_id%2C+source_type%2C+experiment_id%2C+sub_experiment_id%2C+nominal_resolution%2C+variant_label%2C+grid_label%2C+table_id%2C+frequency%2C+realm%2C+variable_id%2C+cf_standard_name&latest=true&query=*&experiment_id=ssp245%2Cssp585%2Cssp370%2Cssp126%2Chistorical&frequency=day&source_id=NorESM2-MM&variable_id=tasmin%2Ctasmax&variant_label=r1i1p1f1"
 nor_query <- cmip_url_to_list(nor_url)
 
 nor_results <- cmip_search(query = nor_query)
