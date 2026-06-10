@@ -10,6 +10,55 @@ YELLOW="\033[38;5;226m"
 GREEN="\033[38;5;34m"
 RESET="\033[0m"
 
+# Process the daily data for NorESM2-MM model first
+# Paths and config
+INPUT_ROOT="/mnt/Data/CMIP6/CMIP6"
+MODEL="NorESM2-MM"
+
+# find all daily tasmax and tasmin files for NorESM2-MM
+mapfile -t DAILY_FILES < <(find "${INPUT_ROOT}" \
+    -path "*/${MODEL}/*" \
+    -path "*/day/*" \
+    -name "*.nc" \
+    \( -name "tasmax*" -o -name "tasmin*" \) | sort)
+
+echo -e "${GREEN}Found ${#DAILY_FILES[@]} daily files for ${MODEL}${RESET}"
+# printf "${YELLOW}%s${RESET}\n" "${DAILY_FILES[@]}" | xargs -I{} basename {}
+
+for nc in "${DAILY_FILES[@]}"; do
+    # replace 'day' with 'Amon' in the input path to write to monthly folder
+    out_dir=$(dirname "${nc}" | sed 's|/day/|/Amon/|')
+    mkdir -p "${out_dir}"
+
+    # build output filename and reformat timerange
+    base=$(basename "${nc}" .nc)
+    timerange=$(echo "${base}" | grep -oP '[0-9]{8}-[0-9]{8}')
+    tstart=$(echo "${timerange}" | cut -d'-' -f1 | cut -c1-6)
+    tend=$(echo "${timerange}" | cut -d'-' -f2 | cut -c1-6)
+    outname=$(echo "${base}" | sed "s|_day_|_Amon_|;s|${timerange}|${tstart}-${tend}|")
+    outfile="${out_dir}/${outname}.nc"
+
+    if [[ -f "${outfile}" ]]; then
+        echo -e "${YELLOW}Skipping: $(basename "${outfile}") already exists${RESET}"
+        continue
+    fi
+
+    echo -e "${GREEN}Processing: $(basename "${nc}")${RESET}"
+    echo -e "${GREEN}        --> $(basename "${outfile}")${RESET}"
+
+    if ! cdo -s -w -L -b F32 -f nc4 -P 100 --timestat_date middle \
+        -monmean "${nc}" "${outfile}"; then
+        echo -e "${RED}monmean failed for $(basename "${nc}")${RESET}"
+        continue
+    fi
+
+    echo -e "${GREEN}Written: ${outfile}${RESET}"
+done
+
+echo -e "${GREEN}NorESM2-MM monthly aggregation complete.${RESET}"
+
+# Process all the monthly data
+
 # Paths and config
 INPUT_ROOT="/mnt/Data/CMIP6/CMIP6"
 OUTPUT_ROOT="/mnt/Data/CMIP6"
@@ -19,8 +68,9 @@ END_DATE="2100-12"
 TMPDIR=$(mktemp -d)
 trap 'rm -rf "${TMPDIR}"' EXIT
 
-# Map the directories
-mapfile -t NC_DIRS < <(find "${INPUT_ROOT}" -name "*.nc" | xargs -I{} dirname {} | sort -u)
+# Map the directories, making sure to exclude 'day'
+mapfile -t NC_DIRS < <(find "${INPUT_ROOT}" -name "*.nc" \
+    -not -path "*/day/*" | xargs -I{} dirname {} | sort -u)
 
 # for testing
 # dir="${NC_DIRS[0]}"
@@ -83,7 +133,7 @@ for dir in "${NC_DIRS[@]}"; do
         tmp_c="${TMPDIR}/crop_$(basename "${nc}")"
         if ! cdo -s -w -L -P 100 -b F32 -f nc4 sellonlatbox,${LONLATBOX} "${nc}" "${tmp_c}"; then
             echo -e "${RED}sellonlatbox failed for ${nc}${RESET}"
-            continue
+            continue 2
         fi
         TMP_CROPS+=("${tmp_c}")
     done
