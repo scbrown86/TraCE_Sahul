@@ -157,12 +157,13 @@ for dir in "${NC_DIRS[@]}"; do
     echo -e "${GREEN}Regridding and converting units...${RESET}"
     if [[ "${variable}" == "pr" ]]; then
         if ! cdo -s -w -L -P 100 -b F32 -f nc4 \
+            -setrtoc,-inf,0,0 \
             -setunit,'mm/month' \
             -muldpm \
             -mulc,86400 \
             -setcalendar,365_day \
             -settaxis,"${DATE_START}",,1month \
-            -remapcon,"${GRID_REF}" "${TMP_CUT}" "${OUTFILE}"; then
+            -remapbil,"${GRID_REF}" "${TMP_CUT}" "${OUTFILE}"; then
             echo -e "${RED}remap/unit conversion failed for ${var} ${model} ${expid}${RESET}"
             continue
         fi
