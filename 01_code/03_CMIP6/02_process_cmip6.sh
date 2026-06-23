@@ -131,7 +131,7 @@ for dir in "${NC_DIRS[@]}"; do
     TMP_CROPS=()
     for nc in "${NC_FILES[@]}"; do
         tmp_c="${TMPDIR}/crop_$(basename "${nc}")"
-        if ! cdo -s -w -L -P 100 -b F32 -f nc4 sellonlatbox,${LONLATBOX} "${nc}" "${tmp_c}"; then
+        if ! cdo -s -L -P 100 -b F32 -f nc4 sellonlatbox,${LONLATBOX} "${nc}" "${tmp_c}"; then
             echo -e "${RED}sellonlatbox failed for ${nc}${RESET}"
             continue 2
         fi
@@ -140,7 +140,7 @@ for dir in "${NC_DIRS[@]}"; do
 
     # Merge along temporal axis
     echo -e "${GREEN}Time concatenation and leap day removal...${RESET}"
-    if ! cdo -s -w -L -P 8 -b F32 -f nc4 \
+    if ! cdo -s -L -P 8 -b F32 -f nc4 \
         -delete,month=2,day=29 \
         [ -mergetime "${TMP_CROPS[@]}" ] "${TMP_MERGE}"; then
         echo -e "${RED}mergetime/delete failed for ${var} ${model} ${expid}${RESET}"
@@ -148,7 +148,7 @@ for dir in "${NC_DIRS[@]}"; do
     fi
 
     # Don't extend past 2100
-    if ! cdo -s -w -L -P 100 -b F32 -f nc4 seldate,1850-01-01,${END_DATE}-31 "${TMP_MERGE}" "${TMP_CUT}"; then
+    if ! cdo -s -L -P 100 -b F32 -f nc4 seldate,1850-01-01,${END_DATE}-31 "${TMP_MERGE}" "${TMP_CUT}"; then
         echo -e "${RED}seldate failed for ${var} ${model} ${expid}${RESET}"
         continue
     fi
@@ -156,7 +156,7 @@ for dir in "${NC_DIRS[@]}"; do
     # Remap and convert units
     echo -e "${GREEN}Regridding and converting units...${RESET}"
     if [[ "${variable}" == "pr" ]]; then
-        if ! cdo -s -w -L -P 100 -b F32 -f nc4 \
+        if ! cdo -s -L -P 100 -b F32 -f nc4 \
             -setrtoc,-inf,0,0 \
             -setunit,'mm/month' \
             -muldpm \
@@ -168,7 +168,7 @@ for dir in "${NC_DIRS[@]}"; do
             continue
         fi
     else
-        if ! cdo -s -w -L -P 100 -b F32 -f nc4 \
+        if ! cdo -s -L -P 100 -b F32 -f nc4 \
             -setunit,'deg_C' \
             -subc,273.15 \
             -setcalendar,365_day \
