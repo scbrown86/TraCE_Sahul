@@ -30,9 +30,9 @@ trap 'rm -rf "${TMPDIR}"' EXIT
 ## make an array to store files so we can easily grab them later
 declare -A TRACE_CLIM_FILES
 for var in "${VARIABLES[@]}"; do
-    TRACE_FILE="${TRACE_ROOT}/${var}/TraCE-Sahul_1500_1990_${var}.nc"
+    TRACE_FILE="${TRACE_ROOT}/${var}/TraCE-Sahul_annual_1500_1990_${var}.nc"
     mkdir -p "${TRACE_ROOT}/Climatology/${var}"
-    TRACE_CLIM_FILE="${TRACE_ROOT}/Climatology/${var}/TraCE-Sahul_1500_1990_${var}.nc"
+    TRACE_CLIM_FILE="${TRACE_ROOT}/Climatology/${var}/TraCE-Sahul_1960_1990_${var}.nc"
     if [[ ! -f "${TRACE_FILE}" ]]; then
         echo -e "${RED}Missing TraCE-Sahul file: ${TRACE_FILE}, skipping variable ${var}${RESET}"
         continue
@@ -235,7 +235,7 @@ for var in "${VARIABLES[@]}"; do
         else
             echo -e "${GREEN}   Calculating ensemble mean...${RESET}"
             if ! cdo -s -L -P 64 -b F32 -f nc4 \
-                ensmedian "${ENS_FILES[@]}" "${MEAN_FILE}"; then
+                ensmean "${ENS_FILES[@]}" "${MEAN_FILE}"; then
                 echo -e "${RED} ensmean failed for ${var} ${experiment}${RESET}"
             else
                 echo -e "${GREEN}   Written: ${MEAN_FILE}${RESET}"

@@ -55,7 +55,7 @@ for var in "${VARIABLES[@]}"; do
     done
     # TraCE-Sahul file
     echo -e "${GREEN}   TraCE-Sahul file${RESET}"
-    trace_file="${TRACE_ROOT}/${var}/TraCE-Sahul_1500_1990_${var}.nc"
+    trace_file="${TRACE_ROOT}/${var}/TraCE-Sahul_annual_1500_1990_${var}.nc"
     if [[ -f "${trace_file}" ]]; then
         process_file "${trace_file}"
     else
