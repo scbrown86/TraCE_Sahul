@@ -82,6 +82,8 @@ make_summary_datasets <- function(dt,
 }
 
 cmip6_bias_corr <- list.files("/mnt/Data/CMIP6/bias_corrected/", pattern = ".txt$", recursive = TRUE, full.names = TRUE)
+cmip6_bias_corr <- cmip6_bias_corr[!grepl(pattern = "climatology", cmip6_bias_corr)]
+cmip6_bias_corr
 cmip6_bias_corr_avgs <- pblapply(cmip6_bias_corr, avg_vals)
 cmip6_bias_corr_avgs[1:4]
 cmip6_bias_corr_avgs <- rbindlist(cmip6_bias_corr_avgs)
@@ -111,19 +113,19 @@ dt_ens <- copy(cmip6_summaries$annual)[Model %in% ens_stats]
 
 # Read in the TraCE-Sahul data for the 
 trace_data <- rbindlist(
-  list(fread("/mnt/Data/TraCE-Sahul/pr/TraCE-Sahul_1500_1990_pr.txt", header = FALSE, skip = 1L,
+  list(fread("/mnt/Data/TraCE-Sahul/pr/TraCE-Sahul_annual_1500_1990_pr.txt", header = FALSE, skip = 1L,
              col.names = c("Date", "Value"))[, `:=`(Year = rep(1500:1989, each = 12),
                                                     Month = rep(month.abb, times = 490),
                                                     Variable = "pr",
                                                     Model = "TraCE-Sahul",
                                                     Experiment = "TraCE")],
-       fread("/mnt/Data/TraCE-Sahul/tasmax/TraCE-Sahul_1500_1990_tasmax.txt", header = FALSE, skip = 1L,
+       fread("/mnt/Data/TraCE-Sahul/tasmax/TraCE-Sahul_annual_1500_1990_tasmax.txt", header = FALSE, skip = 1L,
              col.names = c("Date", "Value"))[, `:=`(Year = rep(1500:1989, each = 12),
                                                     Month = rep(month.abb, times = 490),
                                                     Variable = "tasmax",
                                                     Model = "TraCE-Sahul",
                                                     Experiment = "TraCE")],
-       fread("/mnt/Data/TraCE-Sahul/tasmin/TraCE-Sahul_1500_1990_tasmin.txt", header = FALSE, skip = 1L,
+       fread("/mnt/Data/TraCE-Sahul/tasmin/TraCE-Sahul_annual_1500_1990_tasmin.txt", header = FALSE, skip = 1L,
              col.names = c("Date", "Value"))[, `:=`(Year = rep(1500:1989, each = 12),
                                                     Month = rep(month.abb, times = 490),
                                                     Variable = "tasmin",

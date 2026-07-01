@@ -8,6 +8,10 @@ library(data.table)
 library(pbapply)
 library(patchwork)
 
+packageVersion("terra")
+terra::gdal()
+terra::libVersion()
+
 model_lvl <- c("ensmean", "ACCESS-ESM1-5", "CMCC-ESM2", "EC-Earth3", 
                "MPI-ESM1-2-HR", "MRI-ESM2-0", "NorESM2-MM")
 
@@ -61,8 +65,8 @@ build_climatology_sds <- function(root, variables, types) {
       files <- files[ord]
       full_names <- full_names[ord]
       fils <- pblapply(files, function(x) {
-        r <- raster::brick(x)*1
-        r <- terra::rast(r)
+        #r <- raster::brick(x)*1
+        r <- terra::rast(x, md = FALSE)
         terra::crs(r) <- "EPSG:4326"
         return(r)
       })
@@ -102,6 +106,11 @@ prep_obs_mod <- function(x) {
               values)]
   mod <- dcast(mod, x + y + layer + model ~ source, value.var = "values")
   setnames(mod, c("raw", "bias_corrected"), c("mod_raw", "mod_biascorr"))
+  ensmean_raw <- mod[model != "ensmean",
+                     .(mod_raw = mean(mod_raw, na.rm = TRUE)),
+                     by = .(x, y, layer)]
+  mod[model == "ensmean",
+      mod_raw := ensmean_raw[.SD, on = .(x, y, layer), x.mod_raw]]
   mod[obs, on = .(x, y, layer), .(x, y, layer, obs = i.obs, mod_raw, mod_biascorr, model)]
 }
 
@@ -131,19 +140,19 @@ precips[, `:=`(layer = factor(layer, levels = c("DJF", "MAM", "JJA", "SON")),
 precips
 
 td_precip_s <- TaylorDiagram(precips,
-                    obs = "obs",
-                    mod = c("mod_biascorr", "mod_raw"),
-                    group = "model",
-                    type = "layer",
-                    col = "Dark2",
-                    text.obs = "",
-                    annotate = "",
-                    key.position = "bottom",
-                    key.title = "Model",
-                    key.columns = 7,
-                    nrow = 1, ncol = 4,
-                    normalise = TRUE,
-                    plot = FALSE)
+                             obs = "obs",
+                             mod = c("mod_biascorr", "mod_raw"),
+                             group = "model",
+                             type = "layer",
+                             col = "Dark2",
+                             text.obs = "",
+                             annotate = "",
+                             key.position = "bottom",
+                             key.title = "Model",
+                             key.columns = 7,
+                             nrow = 1, ncol = 4,
+                             normalise = TRUE,
+                             plot = FALSE)
 td_precip_s$plot
 col_scale <- td_precip_s$plot$scales$get_scales("colour")
 col_scale$breaks <- setdiff(col_scale$breaks, "")
@@ -181,6 +190,7 @@ td <- TaylorDiagram(precipy,
                     nrow = 3, ncol = 4,
                     normalise = TRUE,
                     plot = FALSE)
+td$plot
 ggplot_build(td$plot)$layout$layout
 col_scale <- td$plot$scales$get_scales("colour")
 col_scale$breaks <- setdiff(col_scale$breaks, "")
@@ -197,7 +207,7 @@ print(add_panel_labels(td$plot, LETTERS[1:12]) +
               strip.text = element_blank()))
 dev.off()
 pdf("/home/dafcluster4/Documents/GitHub/TraCE_Sahul/01_code/03_CMIP6/monthly_taylor_precip.pdf",
-              height = 12, width = 14, bg = "white")
+    height = 12, width = 14, bg = "white")
 print(add_panel_labels(td$plot, LETTERS[1:12]) +
         theme(legend.title.position = "top",
               strip.clip = "off",
@@ -214,19 +224,19 @@ tasmaxs
 tasmaxs[, `:=`(layer = factor(layer, levels = c("DJF", "MAM", "JJA", "SON")),
                model = factor(model, levels = model_lvl))]
 td_tasmax_s <- TaylorDiagram(tasmaxs,
-                    obs = "obs",
-                    mod = c("mod_biascorr", "mod_raw"),
-                    group = "model",
-                    type = "layer",
-                    col = "Dark2",
-                    text.obs = "",
-                    annotate = "",
-                    key.position = "bottom",
-                    key.title = "Model",
-                    key.columns = 7,
-                    nrow = 1, ncol = 4,
-                    normalise = TRUE,
-                    plot = FALSE)
+                             obs = "obs",
+                             mod = c("mod_biascorr", "mod_raw"),
+                             group = "model",
+                             type = "layer",
+                             col = "Dark2",
+                             text.obs = "",
+                             annotate = "",
+                             key.position = "bottom",
+                             key.title = "Model",
+                             key.columns = 7,
+                             nrow = 1, ncol = 4,
+                             normalise = TRUE,
+                             plot = FALSE)
 ggplot_build(td_tasmax_s$plot)$layout$layout
 col_scale <- td_tasmax_s$plot$scales$get_scales("colour")
 col_scale$breaks <- setdiff(col_scale$breaks, "")
@@ -280,7 +290,7 @@ print(add_panel_labels(td$plot, LETTERS[1:12]) +
               strip.text = element_blank()))
 dev.off()
 pdf("/home/dafcluster4/Documents/GitHub/TraCE_Sahul/01_code/03_CMIP6/monthly_taylor_tasmax.pdf",
-              height = 12, width = 14, bg = "white")
+    height = 12, width = 14, bg = "white")
 print(add_panel_labels(td$plot, LETTERS[1:12]) +
         theme(legend.title.position = "top",
               strip.clip = "off",
@@ -297,19 +307,19 @@ tasmins
 tasmins[, `:=`(layer = factor(layer, levels = c("DJF", "MAM", "JJA", "SON")),
                model = factor(model, levels = model_lvl))]
 td_tasmin_s <- TaylorDiagram(tasmins,
-                    obs = "obs",
-                    mod = c("mod_biascorr", "mod_raw"),
-                    group = "model",
-                    type = "layer",
-                    col = "Dark2",
-                    text.obs = "",
-                    annotate = "",
-                    key.position = "bottom",
-                    key.title = "Model",
-                    key.columns = 7,
-                    nrow = 1, ncol = 4,
-                    normalise = TRUE,
-                    plot = FALSE)
+                             obs = "obs",
+                             mod = c("mod_biascorr", "mod_raw"),
+                             group = "model",
+                             type = "layer",
+                             col = "Dark2",
+                             text.obs = "",
+                             annotate = "",
+                             key.position = "bottom",
+                             key.title = "Model",
+                             key.columns = 7,
+                             nrow = 1, ncol = 4,
+                             normalise = TRUE,
+                             plot = FALSE)
 ggplot_build(td_tasmin_s$plot)$layout$layout
 col_scale <- td_tasmin_s$plot$scales$get_scales("colour")
 col_scale$breaks <- setdiff(col_scale$breaks, "")
@@ -363,7 +373,7 @@ print(add_panel_labels(td$plot, LETTERS[1:12]) +
               strip.text = element_blank()))
 dev.off()
 pdf("/home/dafcluster4/Documents/GitHub/TraCE_Sahul/01_code/03_CMIP6/monthly_taylor_tasmin.pdf",
-              height = 12, width = 14, bg = "white")
+    height = 12, width = 14, bg = "white")
 print(add_panel_labels(td$plot, LETTERS[1:12]) +
         theme(legend.title.position = "top",
               strip.clip = "off",
@@ -406,6 +416,170 @@ combine_seasonal
 dev.off()
 
 pdf("/home/dafcluster4/Documents/GitHub/TraCE_Sahul/01_code/03_CMIP6/seasonal_taylor_combined.pdf",
-              height = 14, width = 14, bg = "white")
+    height = 14, width = 14, bg = "white")
 combine_seasonal
+dev.off()
+
+# Raster plot of ensmean compared to TraCE-Sahul
+# Temperature: ensmean - TraCE-Sahul
+# Precipitation: ensmean / TraCE-Sahul
+# positive temperature values mean the model runs too warm relative to TraCE-Sahul, 
+# negative means too cold. For precipitation, positive = model wetter than 
+# TraCE-Sahul, negative = model drier 
+# ((ensmean - TraCE-Sahul) / TraCE-Sahul) * 100
+ensmeans_long <- pblapply(c("pr", "tasmax", "tasmin"), function(v) {
+  r <- rast(sprintf("/mnt/Data/CMIP6/bias_corrected/ensemble/%s/%s_ensmean_historical_190001-201412.nc", v, v),
+            md = FALSE)
+  crs(r) <- "EPSG:4326"
+  time(r) <- seq(as.Date("1900-01-16"), by = "month", l = nlyr(r))
+  #idx <- which(time(r) <= as.Date("1989-12-31"))
+  idx <- which(time(r) >= as.Date("1950-01-01") & time(r) <= as.Date("1989-12-31"))
+  r <- subset(r, idx)
+  r <- tapp(r, "month", mean)
+  names(r) <- month.abb
+  time(r) <- NULL
+  return(r)
+})
+names(ensmeans_long) <- c("pr", "tasmax", "tasmin")
+ensmeans_long
+
+tracemeans_long <- pblapply(c("pr", "tasmax", "tasmin"), function(v) {
+  r <- rast(sprintf("/mnt/Data/TraCE-Sahul/%s/TraCE-Sahul_annual_1500_1990_%s.nc", v, v),
+            md = FALSE)
+  crs(r) <- "EPSG:4326"
+  time(r) <- seq(as.Date("1500-01-16"), by = "month", l = nlyr(r))
+  idx <- which(time(r) >= as.Date("1950-01-01") & time(r) <= as.Date("1989-12-31"))
+  r <- subset(r, idx)
+  r <- tapp(r, "month", mean)
+  names(r) <- month.abb
+  time(r) <- NULL
+  return(r)
+})
+names(tracemeans_long) <- names(ensmeans_long)
+tracemeans_long
+
+ensmeans_clim <- pblapply(c("pr", "tasmax", "tasmin"), function(v) {
+  r <- rast(sprintf("/mnt/Data/CMIP6/bias_corrected/ensemble/%s/%s_ensmean_historical_190001-201412.nc", v, v),
+            md = FALSE)
+  crs(r) <- "EPSG:4326"
+  time(r) <- seq(as.Date("1900-01-16"), by = "month", l = nlyr(r))
+  idx <- which(time(r) >= as.Date("1960-01-16") & time(r) <= as.Date("1989-12-31"))
+  r <- subset(r, idx)
+  r <- tapp(r, "month", mean)
+  names(r) <- month.abb
+  time(r) <- NULL
+  return(r)
+})
+names(ensmeans_clim) <- c("pr", "tasmax", "tasmin")
+ensmeans_clim
+
+tracemeans_clim <- pblapply(c("pr", "tasmax", "tasmin"), function(v) {
+  r <- rast(sprintf("/mnt/Data/TraCE-Sahul/%s/TraCE-Sahul_annual_1500_1990_%s.nc", v, v),
+            md = FALSE)
+  crs(r) <- "EPSG:4326"
+  time(r) <- seq(as.Date("1500-01-16"), by = "month", l = nlyr(r))
+  idx <- which(time(r) >= as.Date("1960-01-01") & time(r) <= as.Date("1989-12-31"))
+  r <- subset(r, idx)
+  r <- tapp(r, "month", mean)
+  names(r) <- month.abb
+  time(r) <- NULL
+  return(r)
+})
+names(tracemeans_clim) <- names(ensmeans_clim)
+tracemeans_clim
+
+landsea <- tracemeans_clim$pr[[1]]
+landsea <- ifel(is.na(landsea), NA, 1L)
+landsea <- as.polygons(landsea)
+
+residual_bias <- ensmeans_clim$pr - tracemeans_clim$pr # each is a 12 layer climatological average
+pr_adjusted <- ensmeans_clim$pr - residual_bias # indexed will match as its Jan - Dec
+diff_check <- pr_adjusted - tracemeans_clim$pr # should all be zero
+diff_check
+
+long_clim_pr_adj <- ensmeans_long$pr - residual_bias
+pr_anom <- ((long_clim_pr_adj - tracemeans_long$pr)/tracemeans_long$pr)*100
+pr_anom <- long_clim_pr_adj - tracemeans_long$pr
+pr_anom
+minmax(pr_anom)
+grDevices::cairo_pdf("/home/dafcluster4/Documents/GitHub/TraCE_Sahul/01_code/03_CMIP6/pr_anoms.pdf",
+                     width = 10, height = 8,
+                     family = "sans",
+                     antialias = "subpixel",
+                     fallback_resolution = 350)
+# ragg::agg_png("/home/dafcluster4/Documents/GitHub/TraCE_Sahul/01_code/03_CMIP6/pr_anoms.png",
+#               width = 10, height = 8, units = "in", res = 320,
+#               background = "white")
+panel(pr_anom, grid = TRUE,
+      background = "grey80",
+      plg = list(
+        # title = expression(100 %*% (Pr['ens'] - Pr['TraCE-Sahul']) / Pr['Trace-Sahul']),
+        title = expression(Pr['ens'] - Pr['TraCE-Sahul'] ~ (mm ~ month^-1)),
+        title.x = 182,
+        title.y = -15,
+        title.srt = 90,
+        title.cex = 1,
+        digits = 0,
+        bty = "n",
+        size = c(1, 1),
+        at = seq(-20, 20, l = 11),
+        tick = "through"),
+      box = TRUE,
+      pax = list(
+        yat = seq(-90, 90, 10),
+        retro = TRUE),
+      loc.main = "bottomleft",
+      range = c(-20, 20), fill_range = TRUE,
+      nc = 4,
+      ext = c(105, 161.25, -45, 11.25),
+      smooth = FALSE,
+      fun = function(i) {
+        lines(landsea, lwd = 0.75)
+      },
+      col = cptcity::cpt("rc_wildwinds", 100))
+dev.off()
+
+tas_anoms <- (0.5*(ensmeans_long$tasmax + ensmeans_long$tasmin)) - 
+  (0.5*(tracemeans_long$tasmax + tracemeans_long$tasmin))
+tas_anoms
+minmax(tas_anoms)
+
+grDevices::cairo_pdf("/home/dafcluster4/Documents/GitHub/TraCE_Sahul/01_code/03_CMIP6/tas_anoms.pdf",
+                     width = 10, height = 8,
+                     family = "sans",
+                     antialias = "subpixel",
+                     fallback_resolution = 350)
+# ragg::agg_png("/home/dafcluster4/Documents/GitHub/TraCE_Sahul/01_code/03_CMIP6/tas_anoms.png",
+#               width = 10, height = 8, units = "in", res = 320,
+#               background = "white")
+panel(tas_anoms,
+      maxcell = ncell(tas_anoms),
+      cex.main = 1.2,
+      grid = TRUE,
+      background = "grey80",
+      plg = list(
+        title = expression(Tas["2m, ens"] - Tas["2m, TraCE-Sahul"] ~ degree * C),
+        title.x = 182,
+        title.y = -15,
+        title.srt = 90,
+        title.cex = 1,
+        digits = 1,
+        bty = "n",
+        size = c(1, 1),
+        at = seq(-1, 1, l = 11),
+        tick = "through"),
+      box = TRUE,
+      pax = list(
+        yat = seq(-90, 90, 10),
+        retro = TRUE),
+      loc.main = "bottomleft",
+      range = c(-1, 1),
+      fill_range = TRUE,
+      nc = 4,
+      ext = c(105, 161.25, -45, 11.25),
+      smooth = FALSE,
+      fun = function(i) {
+        lines(landsea, lwd = 0.75)
+      },
+      col = hcl.colors(100, "Spectral", rev = TRUE))
 dev.off()
