@@ -21,6 +21,19 @@ process_file() {
     mkdir -p "${outdir}"
     local base
     base="$(basename "${infile}" .nc)"
+    # seasonal averages (annual)
+    local outfile_seas="${outdir}/${base}_seasmean.nc"
+    if [[ -f "${outfile_seas}" ]]; then
+        echo -e "${YELLOW}  Skipping: ${outfile_seas} already exists${RESET}"
+    else
+        echo -e "${GREEN}   Seasonal climatology: $(basename "${infile}")${RESET}"
+        if ! cdo -b F32 -f nc4 seasmean -selyear,1910/1989 "${infile}" "${outfile_seas}"; then
+            echo -e "${RED}   seasmean failed for ${infile}${RESET}"
+            rm -f "${outfile_seas}"
+        else
+            echo -e "${GREEN}   Written: ${outfile_seas}${RESET}"
+        fi
+    fi
     # seasonal climatology
     local outfile_yseas="${outdir}/${base}_yseasmean.nc"
     if [[ -f "${outfile_yseas}" ]]; then

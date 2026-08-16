@@ -493,6 +493,42 @@ landsea <- ifel(is.na(landsea), NA, 1L)
 landsea <- as.polygons(landsea)
 
 residual_bias <- ensmeans_clim$pr - tracemeans_clim$pr # each is a 12 layer climatological average
+residual_bias
+minmax(residual_bias)
+
+full_breaks <- seq(-6, 6, length.out = 100)
+full_cols <- scico::scico(n = 99, palette =  "vik", direction = -1)
+keep <- full_breaks <= 1
+cols <- full_cols[keep[-1]]   # one colour per interval
+panel(residual_bias,
+      grid = TRUE,
+      background = "grey80",
+      plg = list(
+        # title = expression(100 %*% (Pr['ens'] - Pr['TraCE-Sahul']) / Pr['Trace-Sahul']),
+        title = "Residual bias in precip [mm/month]",
+        title.x = 182,
+        title.y = -15,
+        title.srt = 90,
+        title.cex = 1,
+        digits = 0,
+        bty = "n",
+        size = c(1, 1),
+        at = seq(-6, 1, l = 8),
+        tick = "through"),
+      box = TRUE,
+      pax = list(
+        yat = seq(-90, 90, 10),
+        retro = TRUE),
+      loc.main = "bottomleft",
+      range = c(-6, 1), 
+      fill_range = TRUE,
+      nc = 4,
+      ext = c(105, 161.25, -45, 11.25),
+      smooth = FALSE,
+      fun = function(i) {
+        lines(landsea, lwd = 0.75)
+      },
+      col = cols)
 pr_adjusted <- ensmeans_clim$pr - residual_bias # indexed will match as its Jan - Dec
 diff_check <- pr_adjusted - tracemeans_clim$pr # should all be zero
 diff_check
@@ -502,6 +538,10 @@ pr_anom <- ((long_clim_pr_adj - tracemeans_long$pr)/tracemeans_long$pr)*100
 pr_anom <- long_clim_pr_adj - tracemeans_long$pr
 pr_anom
 minmax(pr_anom)
+mean(minmax(pr_anom))
+mean(global(pr_anom, min, na.rm = TRUE)[,1])
+mean(global(pr_anom, max, na.rm = TRUE)[,1])
+
 grDevices::cairo_pdf("/home/dafcluster4/Documents/GitHub/TraCE_Sahul/01_code/03_CMIP6/pr_anoms.pdf",
                      width = 10, height = 8,
                      family = "sans",
