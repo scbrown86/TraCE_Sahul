@@ -5,8 +5,8 @@
 ##  IT IS RUN FROM 01_code/01_Decadal_pre1500/05_bias_correction_dtr_method.sh  ##
 ##################################################################################
 
-library(ncdf4)
-library(data.table)
+suppressPackageStartupMessages({library(ncdf4); library(data.table)})
+
 
 args <- commandArgs(trailingOnly = TRUE)
 if(length(args) < 1){
@@ -19,10 +19,16 @@ fil <- args[1] # from arguments on command line
 # read the timesteps
 time_steps <- fread("/home/dafcluster4/Documents/GitHub/TraCE_Sahul/02_data/downTrace_timesteps_paleoDecades.csv")
 
-# open the file and extract number of steps
+# open the file, check the units
 f <- nc_open(fil, write = TRUE)
-nt <- f$dim$time$len
 
+# check units. Exit if already processed
+if (ncatt_get(f, "time", "units")$value == "decimal year CE") {
+  nc_close(f)
+  quit(save = "no", status = 0)
+}
+# else extract number of steps and continue
+nt <- f$dim$time$len
 
 if (nt == 25860) { # if full file, then replace with full time index
   time_index <- time_steps[!is.na(dec), ][["dec_year"]]
@@ -33,6 +39,7 @@ if (nt == 25860) { # if full file, then replace with full time index
   ncatt_put(f, "time", "units", "decimal year CE")
   ncatt_put(f, "time", "long_name", "decimal year (negative = BCE, positive = CE)")
   nc_close(f)
+  quit(save = "no", status = 0)
   } else { # else use the dates for the step only
   # grab the "step" from the filename
   step <- as.integer(gsub(".nc", "", sapply(strsplit(basename(fil), "_"), tail, 1)))
@@ -43,4 +50,5 @@ if (nt == 25860) { # if full file, then replace with full time index
   ncatt_put(f, "time", "units", "decimal year CE")
   ncatt_put(f, "time", "long_name", "decimal year (negative = BCE, positive = CE)")
   nc_close(f)
+  quit(save = "no", status = 0)
 }
