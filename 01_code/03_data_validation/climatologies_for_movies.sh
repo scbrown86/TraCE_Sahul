@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-
 conda activate nco_stable
+set -euo pipefail
 
 decadal_base="/media/dafcluster4/storage/TraCE_22k_1500CE/out"
 annual_base="/mnt/Data/TraCE-Sahul"
@@ -18,17 +18,17 @@ for var in "${vars[@]}"; do
     out_dir="${out_base}/${var}"
     mkdir -p "${out_dir}"
 
-    decadal_in="${decadal_base}/${var}/TraCE-Sahul_decadal_21k_1500CE_${var}.nc"
+    decadal_in="${decadal_base}/${var}/TraCE-Sahul_decadal_22k_1500CE_${var}.nc"
     if [[ -e "${decadal_in}" ]]; then
         fname=$(basename "${decadal_in}" .nc)
         fname="${fname/21k/22k}"
         outfile="${out_dir}/${fname}_30yrClim.nc"
         if [[ "${var}" == "pr" ]]; then
-            cdo --timestat_date last --precision 1,1 -C all -b F32 -O -s -L -P 36 \
+            cdo --timestat_date last -C all -b F32 -O -s -L -P 36 \
             mulc,12 -timselmean,${decadal_window},${decadal_offset} "${decadal_in}" "${outfile}"
         else
-            cdo --timestat_date last --precision 1,1 -C all -b F32 -O -s -L -P 36 \
-            -s timselmean,${decadal_window},${decadal_offset} "${decadal_in}" "${outfile}"
+            cdo --timestat_date last -C all -b F32 -O -s -L -P 36 \
+            timselmean,${decadal_window},${decadal_offset} "${decadal_in}" "${outfile}"
         fi
     fi
 
@@ -37,11 +37,11 @@ for var in "${vars[@]}"; do
         fname=$(basename "${annual_in}" .nc)
         outfile="${out_dir}/${fname}_30yrClim.nc"
         if [[ "${var}" == "pr" ]]; then
-            cdo --timestat_date last --precision 1,1 -C all -b F32 -O -s -L -P 36 \
-            -s mulc,12 -timselmean,${annual_window},${annual_offset} "${annual_in}" "${outfile}"
+            cdo --timestat_date last -C all -b F32 -O -s -L -P 36 \
+            mulc,12 -timselmean,${annual_window},${annual_offset} "${annual_in}" "${outfile}"
         else
-            cdo --timestat_date last --precision 1,1 -C all -b F32 -O -s -L -P 36 \
-            -s timselmean,${annual_window},${annual_offset} "${annual_in}" "${outfile}"
+            cdo --timestat_date last -C all -b F32 -O -s -L -P 36 \
+            timselmean,${annual_window},${annual_offset} "${annual_in}" "${outfile}"
         fi
     fi
 done
