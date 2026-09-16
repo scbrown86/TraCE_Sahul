@@ -22,7 +22,7 @@ for var in "${vars[@]}"; do
         else
             daterange="2015_2100"
         fi
-        f="${base_dir}/${var}/TraCE-Sahul_${scenario}_${daterange}.nc"
+        f="${base_dir}/${var}/TraCE-Sahul_${scenario}_${daterange}_${var}.nc"
         if [ ! -f "$f" ]; then
             echo -e "${RED} Missing $f, skipping...${RESET}"
             continue
