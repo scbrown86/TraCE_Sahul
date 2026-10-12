@@ -192,15 +192,13 @@ pbsapply(1:nlyr(tasmax), function(i) {
 
 # Combine both datasets using FFMPEG
 # ffmpeg \
-# -framerate 6 -i pr/frame_%04d.png \
 # -framerate 6 -i tas/frame_%04d.png \
-# -filter_complex "[0:v][1:v]hstack=inputs=2,tpad=start_mode=clone:start_duration=5:stop_mode=clone:stop_duration=5[v]" \
-# -map "[v]" \
-# -c:v libx264 \
-# -preset slow \
-# -crf 16 \
+# -framerate 6 -i pr/frame_%04d.png \
+# -filter_complex "[0:v][1:v]hstack=inputs=2,pad=iw:ceil(ih/2)*2,tpad=start_mode=clone:start_duration=3:stop_mode=clone:stop_duration=3,minterpolate=fps=30:mi_mode=blend[v]" \
+# -map "[v]" -c:v libx264 \
+# -preset slow -crf 16 \
 # -pix_fmt yuv420p \
-# TraCESahul_annual_climate.mp4
+# TraCESahul_annual_climate_w_interp.mp4
 
 # Read in the CMIP6 data
 
@@ -374,12 +372,10 @@ pbsapply(1:nlyr(cmip6_tasmax$ssp126), function(i) {
 
 # Combine both datasets using FFMPEG
 # ffmpeg \
-# -framerate 2 -i pr/frame_cmip6_%04d.png \
 # -framerate 2 -i tas/frame_cmip6_%04d.png \
-# -filter_complex "[0:v][1:v]hstack=inputs=2,pad=iw:ceil(ih/2)*2,tpad=start_mode=clone:start_duration=3:stop_mode=clone:stop_duration=3[v]" \
-# -map "[v]" \
-# -c:v libx264 \
-# -preset slow \
-# -crf 16 \
+# -framerate 2 -i pr/frame_cmip6_%04d.png \
+# -filter_complex "[0:v][1:v]hstack=inputs=2,pad=iw:ceil(ih/2)*2,tpad=start_mode=clone:start_duration=3:stop_mode=clone:stop_duration=3,minterpolate=fps=30:mi_mode=blend[v]" \
+# -map "[v]" -c:v libx264 \
+# -preset slow -crf 16 \
 # -pix_fmt yuv420p \
-# CMIP6Sahul_annual_climate.mp4
+# CMIP6Sahul_annual_climate_w_interp.mp4
